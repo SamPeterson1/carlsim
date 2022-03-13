@@ -17,8 +17,10 @@
 #define NO_PROMOTION ' '
 #define WHITE 'w'
 #define BLACK 'b'
-#define get(rank, file) board[rank*8+file]
-#define set(rank, file, piece)board[rank*8+file] = piece
+#define get(rank, file) board.board[rank*8+file]
+#define set(rank, file, piece)board.board[rank*8+file] = piece
+
+int print = TRUE;
 
 typedef struct PosNode_s {
 
@@ -56,44 +58,46 @@ typedef struct Moves_s {
 
 Moves blah;
 
-char board[64];
+typedef struct Board_s {
+    char board[64];
+    char turn;
 
-int enPassantTarget = 0;
+    int enPassantTarget;
+    int halfMoves;
+    int fullMoves;
 
-int blackQCastleRight = TRUE;
-int blackKCastleRight = TRUE;
-int whiteQCastleRight = TRUE;
-int whiteKCastleRight = TRUE;
+    int blackQCastleRight;
+    int blackKCastleRight;
+    int whiteQCastleRight;
+    int whiteKCastleRight;
 
-int prevBlackQCastleRight = TRUE;
-int prevBlackKCastleRight = TRUE;
-int prevWhiteQCastleRight = TRUE;
-int prevWhiteKCastleRight = TRUE;
+    Positions whitePawns;
+    Positions whiteKnights;
+    Positions whiteBishops;
+    Positions whiteRooks;
+    Positions whiteQueens;
+    int whiteKing;
 
-Positions whitePawns;
-Positions whiteKnights;
-Positions whiteBishops;
-Positions whiteRooks;
-Positions whiteQueens;
+    Positions blackPawns;
+    Positions blackKnights;
+    Positions blackBishops;
+    Positions blackRooks;
+    Positions blackQueens;
+    int blackKing;
+} Board;
 
-int whiteKing;
-
-Positions blackPawns;
-Positions blackKnights;
-Positions blackBishops;
-Positions blackRooks;
-Positions blackQueens;
-
-int blackKing;
-
-int halfMoves = 0;
-int fullMoves = 0;
+Board board;
 
 MoveNode lastMove;
 int prevEnPassantTarget;
 char prevCapturedPiece;
 
-char turn = 'w';
+int prevBlackKCastleRight;
+int prevBlackQCastleRight;
+int prevWhiteKCastleRight;
+int prevWhiteQCastleRight;
+
+int moveCount;
 
 void printBoard() {    
     printf("\e[1;1H\e[2J");
@@ -109,17 +113,9 @@ void printBoard() {
     printf("     (a) (b) (c) (d) (e) (f) (g) (h)\n\n");
 }
 
-int getFile(char file) {
-    return file - 97;
-}
-
-int getRank(char rank) {
-    return rank - 49;
-}
-
 int parseSquare(char *square) {
-    int rank = getRank(square[1]);
-    int file = getFile(square[0]);
+    int rank = square[1] - 49;
+    int file = square[0] - 97;
 
     return rank*8 + file;
 }
@@ -144,26 +140,26 @@ void addMoveNode(Moves *moves, MoveNode *node) {
     moves->len ++;
 }
 
+MoveNode *allocDefaultMoveNode() {
+    MoveNode *node;
+    node = (MoveNode *)calloc(1, sizeof(MoveNode));
+
+    node->origin = -1;
+    node->dest = -1;
+    node->enPassantTarget = -1;
+    node->castle = NO_CASTLE;
+    node->promotion = NO_PROMOTION;
+
+    return node;
+}
+
 void addMove(Moves *moves, int origin, int dest) {
     if(origin >= 0 && origin < 64 && dest >= 0 && dest < 64) {
-        MoveNode *node;
-
-        node = (MoveNode *)calloc(1, sizeof(MoveNode));
+        MoveNode *node = allocDefaultMoveNode();
 
         node->origin = origin;
         node->dest = dest;
-        node->enPassantTarget = -1;
-        node->castle = NO_CASTLE;
-        node->promotion = NO_PROMOTION;
-
-        if(moves->head == NULL) {
-            moves->head = node;
-            moves->tail = node;
-        } else {
-            moves->tail->next = node;
-            moves->tail = node;
-        }
-        moves->len ++;
+        addMoveNode(moves, node);
     }
 }
 
@@ -179,43 +175,20 @@ int containsMove(Moves moves, MoveNode move) {
 }
 
 void addPromotionMove(Moves *moves, int origin, int dest, char promotion) {
-    MoveNode *node;
-
-    node = (MoveNode *)calloc(1, sizeof(MoveNode));
+    MoveNode *node = allocDefaultMoveNode();
 
     node->origin = origin;
     node->dest = dest;
-    node->enPassantTarget = -1;
-    node->castle = NO_CASTLE;
     node->promotion = promotion;
-    if(moves->head == NULL) {
-        moves->head = node;
-        moves->tail = node;
-    } else {
-        moves->tail->next = node;
-        moves->tail = node;
-    }
-    moves->len ++;
+
+    addMoveNode(moves, node);
 }
 
 void addCastleMove(Moves *moves, int castle) {
-    MoveNode *node;
+    MoveNode *node = allocDefaultMoveNode();
 
-    node = (MoveNode *)calloc(1, sizeof(MoveNode));
-
-    node->origin = -1;
-    node->dest = -1;
-    node->enPassantTarget = -1;
     node->castle = castle;
-    node->promotion = NO_PROMOTION;
-    if(moves->head == NULL) {
-        moves->head = node;
-        moves->tail = node;
-    } else {
-        moves->tail->next = node;
-        moves->tail = node;
-    }
-    moves->len ++;
+    addMoveNode(moves, node);
 }
 
 void printMoves(Moves moves) {
@@ -226,7 +199,13 @@ void printMoves(Moves moves) {
         char dest[3];
         getSquareChar(current->origin, origin);
         getSquareChar(current->dest, dest);
-        printf("%s %s %c \n", origin, dest, current->promotion);
+        if(current->castle == NO_CASTLE) {
+            printf("%s %s %c \n", origin, dest, current->promotion);
+        } else if(current->castle == WHITE_QUEEN_SIDE_CASTLE || current->castle == BLACK_QUEEN_SIDE_CASTLE) {
+            printf("O-O-O %d\n", current->castle);
+        } else if(current->castle == WHITE_KING_SIDE_CASTLE || current->castle == BLACK_KING_SIDE_CASTLE) {
+            printf("O-O %d\n", current->castle);
+        }
         current = current->next;
     }
 }
@@ -268,14 +247,12 @@ void removePosition(Positions *positions, int pos) {
             positions->len --;
             if(last == NULL) {
                 positions->head = current->next;
-                free(current);
-                break;
             } else {
                 last->next = current->next;
                 if(last->next == NULL) positions->tail = last;
-                free(current);
-                break;
             }
+            free(current);
+            break;
         }
         last = current;
         current = current->next;
@@ -320,7 +297,6 @@ void parse(const char *str, char **args, int *argc)
             {
                 *(args[*argc] + pos) = ch;
                 pos += 1;
-                // printf("%c token = %d, literal = %d, argc = %d, pos = %d\n", ch, intoken, inliteral, *argc, pos);
             }
             else
             {
@@ -329,7 +305,6 @@ void parse(const char *str, char **args, int *argc)
                     intoken = FALSE;
                     inliteral = FALSE;
                     pos = 0;
-                    // printf("%c token = %d, literal = %d, argc = %d, pos = %d\n", ch, intoken, inliteral, *argc, pos);
                 }
             }
         }
@@ -340,7 +315,6 @@ void parse(const char *str, char **args, int *argc)
                 intoken = FALSE;
                 inliteral = FALSE;
                 pos = 0;
-                // printf("%c token = %d, literal = %d, argc = %d, pos = %d\n", ch, intoken, inliteral, *argc, pos);
             }
             else
             {
@@ -348,7 +322,6 @@ void parse(const char *str, char **args, int *argc)
                 inliteral = TRUE;
                 *argc += 1;
                 pos = 0;
-                // printf("%c token = %d, literal = %d, argc = %d, pos = %d\n", ch, intoken, inliteral, *argc, pos);
             }
         }
         else if (ch >= 33 && ch <= 126)
@@ -358,7 +331,6 @@ void parse(const char *str, char **args, int *argc)
             {
                 *(args[*argc] + pos) = ch;
                 pos += 1;
-                // printf("%c token = %d, literal = %d, argc = %d, pos = %d\n", ch, intoken, inliteral, *argc, pos);
             }
             else
             {
@@ -366,14 +338,12 @@ void parse(const char *str, char **args, int *argc)
                 pos = 0;
                 *(args[*argc] + pos) = ch;
                 pos += 1;
-                // printf("%c token = %d, literal = %d, argc = %d, pos = %d\n", ch, intoken, inliteral, *argc, pos);
             }
             intoken = TRUE;
         }
     }
 
     *argc += 1;
-    return;
 }
 
 void loadFENStr(char *FENCode) {
@@ -388,17 +358,17 @@ void loadFENStr(char *FENCode) {
     }
 
     
-    clearPositions(&blackPawns);
-    clearPositions(&blackKnights);
-    clearPositions(&blackBishops);
-    clearPositions(&blackRooks);
-    clearPositions(&blackQueens);
+    clearPositions(&board.blackPawns);
+    clearPositions(&board.blackKnights);
+    clearPositions(&board.blackBishops);
+    clearPositions(&board.blackRooks);
+    clearPositions(&board.blackQueens);
 
-    clearPositions(&whitePawns);
-    clearPositions(&whiteKnights);
-    clearPositions(&whiteBishops);
-    clearPositions(&whiteRooks);
-    clearPositions(&whiteQueens);
+    clearPositions(&board.whitePawns);
+    clearPositions(&board.whiteKnights);
+    clearPositions(&board.whiteBishops);
+    clearPositions(&board.whiteRooks);
+    clearPositions(&board.whiteQueens);
     
 
     while(FENCode[i] != ' ') {
@@ -409,40 +379,40 @@ void loadFENStr(char *FENCode) {
             set(rank, file, FENCode[i]);
             switch(FENCode[i]) {
                 case 'p':
-                    addPosition(&blackPawns, rank*8 + file);
+                    addPosition(&board.blackPawns, rank*8 + file);
                     break;
                 case 'n':
-                    addPosition(&blackKnights, rank*8 + file);
+                    addPosition(&board.blackKnights, rank*8 + file);
                     break;
                 case 'b':
-                    addPosition(&blackBishops, rank*8 + file);
+                    addPosition(&board.blackBishops, rank*8 + file);
                     break;
                 case 'r':
-                    addPosition(&blackRooks, rank*8 + file);
+                    addPosition(&board.blackRooks, rank*8 + file);
                     break;
                 case 'q':
-                    addPosition(&blackQueens, rank*8 + file);
+                    addPosition(&board.blackQueens, rank*8 + file);
                     break;
                 case 'k':
-                    blackKing = rank*8 + file;
+                    board.blackKing = rank*8 + file;
                     break;
                 case 'P':
-                    addPosition(&whitePawns, rank*8 + file);
+                    addPosition(&board.whitePawns, rank*8 + file);
                     break;
                 case 'N':
-                    addPosition(&whiteKnights, rank*8 + file);
+                    addPosition(&board.whiteKnights, rank*8 + file);
                     break;
                 case 'B':
-                    addPosition(&whiteBishops, rank*8 + file);
+                    addPosition(&board.whiteBishops, rank*8 + file);
                     break;
                 case 'R':
-                    addPosition(&whiteRooks, rank*8 + file);
+                    addPosition(&board.whiteRooks, rank*8 + file);
                     break;
                 case 'Q':
-                    addPosition(&whiteQueens, rank*8 + file);
+                    addPosition(&board.whiteQueens, rank*8 + file);
                     break;
                 case 'K':
-                    whiteKing = rank*8 + file;
+                    board.whiteKing = rank*8 + file;
                     break;
             }
             file ++;
@@ -452,31 +422,31 @@ void loadFENStr(char *FENCode) {
         i++;
     }
     i++;
-    turn = FENCode[i];
+    board.turn = FENCode[i];
     i += 2;
 
-    blackKCastleRight = FALSE;
-    blackQCastleRight = FALSE;
-    whiteKCastleRight = FALSE;
-    whiteQCastleRight = FALSE;
+    board.blackKCastleRight = FALSE;
+    board.blackQCastleRight = FALSE;
+    board.whiteKCastleRight = FALSE;
+    board.whiteQCastleRight = FALSE;
 
     while(FENCode[i] != ' ') {
         if(FENCode[i] == 'Q') {
-            whiteQCastleRight = TRUE;
+            board.whiteQCastleRight = TRUE;
         } else if(FENCode[i] == 'q') {
-            blackQCastleRight = TRUE;
+            board.blackQCastleRight = TRUE;
         } else if(FENCode[i] == 'K') {
-            whiteKCastleRight = TRUE;
+            board.whiteKCastleRight = TRUE;
         } else if(FENCode[i] == 'k') {
-            blackKCastleRight = TRUE;
+            board.blackKCastleRight = TRUE;
         }
         i++;
     }
     i++;
 
-    enPassantTarget = -1;
+    board.enPassantTarget = -1;
     if(FENCode[i] != '-') {
-        enPassantTarget = getRank(FENCode[i+1])*8 + getFile(FENCode[i]);
+        board.enPassantTarget = (FENCode[i+1] - 49)*8 + (FENCode[i] - 97);
         i++;
     }
     i+= 2;
@@ -487,7 +457,7 @@ void loadFENStr(char *FENCode) {
     }
     char halfMovesChar[len];
     memcpy(halfMovesChar, &FENCode[i-len], len);
-    halfMoves = atoi(halfMovesChar);
+    board.halfMoves = atoi(halfMovesChar);
 
     len = 0;
     while(FENCode[i] != '\0') {
@@ -496,31 +466,31 @@ void loadFENStr(char *FENCode) {
     }
     char fullMovesChar[len];
     memcpy(fullMovesChar, &FENCode[i-len], len);
-    fullMoves = atoi(fullMovesChar);
+    board.fullMoves = atoi(fullMovesChar);
 }
 
 Positions *getPositionsOfType(char piece) {
     switch(piece) {
         case 'p':
-            return &blackPawns;
+            return &board.blackPawns;
         case 'n':
-            return &blackKnights;
+            return &board.blackKnights;
         case 'b':
-            return &blackBishops;
+            return &board.blackBishops;
         case 'r':
-            return &blackRooks;
+            return &board.blackRooks;
         case 'q':
-            return &blackQueens;
+            return &board.blackQueens;
         case 'P':
-            return &whitePawns;
+            return &board.whitePawns;
         case 'N':
-            return &whiteKnights;
+            return &board.whiteKnights;
         case 'B':
-            return &whiteBishops;
+            return &board.whiteBishops;
         case 'R':
-            return &whiteRooks;
+            return &board.whiteRooks;
         case 'Q':
-            return &whiteQueens;
+            return &board.whiteQueens;
     }
 
     return NULL;
@@ -537,208 +507,209 @@ void printPositions(Positions positions) {
     printf("\n");
 }
 
-void unMakeMove(MoveNode move, char capturedPiece, int lastEnPassantTarget, int changeTurn) {
+void unMakeMove(MoveNode move, char capturedPiece, int lastEnPassantTarget) {
     
     if(move.enPassantTarget != -1) {
-        board[move.enPassantTarget] = capturedPiece;
+        board.board[move.enPassantTarget] = capturedPiece;
         Positions *capturedPosition = getPositionsOfType(capturedPiece);
         addPosition(capturedPosition, move.enPassantTarget);
 
-        Positions *movedPosition = getPositionsOfType(board[move.dest]);
+        Positions *movedPosition = getPositionsOfType(board.board[move.dest]);
         removePosition(movedPosition, move.dest);
         addPosition(movedPosition, move.origin);
-        board[move.origin] = board[move.dest];
-        board[move.dest] = ' ';
+        board.board[move.origin] = board.board[move.dest];
+        board.board[move.dest] = ' ';
     } else if(move.castle != NO_CASTLE) {
         if(move.castle == WHITE_KING_SIDE_CASTLE) {
-            board[7] = 'R';
-            board[4] = 'K';
-            board[6] = ' ';
-            board[5] = ' ';
-            whiteKing = 4;
-            addPosition(&whiteRooks, 7);
-            removePosition(&whiteRooks, 5);
+            board.board[7] = 'R';
+            board.board[4] = 'K';
+            board.board[6] = ' ';
+            board.board[5] = ' ';
+            board.whiteKing = 4;
+            addPosition(&board.whiteRooks, 7);
+            removePosition(&board.whiteRooks, 5);
         } else if(move.castle == WHITE_QUEEN_SIDE_CASTLE) {
-            board[0] = 'R';
-            board[4] = 'K';
-            board[2] = ' ';
-            board[3] = ' ';
-            whiteKing = 4;
-            addPosition(&whiteRooks, 0);
-            removePosition(&whiteRooks, 3);
+            board.board[0] = 'R';
+            board.board[4] = 'K';
+            board.board[2] = ' ';
+            board.board[3] = ' ';
+            board.whiteKing = 4;
+            addPosition(&board.whiteRooks, 0);
+            removePosition(&board.whiteRooks, 3);
         } else if(move.castle == BLACK_KING_SIDE_CASTLE) {
-            board[63] = 'r';
-            board[60] = 'k';
-            board[62] = ' ';
-            board[61] = ' ';
-            blackKing = 60;
-            addPosition(&blackRooks, 63);
-            removePosition(&blackRooks, 61);
+            board.board[63] = 'r';
+            board.board[60] = 'k';
+            board.board[62] = ' ';
+            board.board[61] = ' ';
+            board.blackKing = 60;
+            addPosition(&board.blackRooks, 63);
+            removePosition(&board.blackRooks, 61);
         } else if(move.castle == BLACK_QUEEN_SIDE_CASTLE) {
-            board[56] = 'r';
-            board[60] = 'k';
-            board[58] = ' ';
-            board[59] = ' ';
-            blackKing = 60;
-            addPosition(&blackRooks, 56);
-            removePosition(&blackRooks, 59);
+            board.board[56] = 'r';
+            board.board[60] = 'k';
+            board.board[58] = ' ';
+            board.board[59] = ' ';
+            board.blackKing = 60;
+            addPosition(&board.blackRooks, 56);
+            removePosition(&board.blackRooks, 59);
         }
     } else {
         if(capturedPiece == 'K') {
-            whiteKing = move.dest;
-            board[move.dest] = 'K';
+            board.whiteKing = move.dest;
+            board.board[move.dest] = 'K';
         } else if(capturedPiece == 'k') {
-            board[move.dest] = 'k';
-            blackKing = move.dest;
+            board.board[move.dest] = 'k';
+            board.blackKing = move.dest;
         } else if(capturedPiece != ' ') {
             Positions *capturedPosition = getPositionsOfType(capturedPiece);
             addPosition(capturedPosition, move.dest);
         }
-        if(board[move.dest] == 'K') {
-           whiteKing = move.origin;
-           board[move.origin] = 'K';
-           board[move.dest] = capturedPiece;
-       } else if(board[move.dest] == 'k') {
-           blackKing = move.origin;
-           board[move.origin] = 'k';
-           board[move.dest] = capturedPiece;
+        if(board.board[move.dest] == 'K') {
+           board.whiteKing = move.origin;
+           board.board[move.origin] = 'K';
+           board.board[move.dest] = capturedPiece;
+       } else if(board.board[move.dest] == 'k') {
+           board.blackKing = move.origin;
+           board.board[move.origin] = 'k';
+           board.board[move.dest] = capturedPiece;
        } else {
-            Positions *movedPosition = getPositionsOfType(board[move.dest]);
+            Positions *movedPosition = getPositionsOfType(board.board[move.dest]);
             removePosition(movedPosition, move.dest);
             addPosition(movedPosition, move.origin);
 
-            board[move.origin] = board[move.dest];
-            board[move.dest] = capturedPiece;
+            board.board[move.origin] = board.board[move.dest];
+            board.board[move.dest] = capturedPiece;
        }
     }
 
     if(move.promotion != NO_PROMOTION) {
-        Positions *pawnPosition = (turn == WHITE) ? &whitePawns : &blackPawns;
+        Positions *pawnPosition = (board.turn == WHITE) ? &board.blackPawns : &board.whitePawns;
         Positions *promotedPosition = getPositionsOfType(move.promotion);
         removePosition(promotedPosition, move.origin);
         addPosition(pawnPosition, move.origin);
-        board[move.origin] = (turn == WHITE) ? 'P' : 'p';
+        board.board[move.origin] = (board.turn == WHITE) ? 'p' : 'P';
     }
 
-    enPassantTarget = lastEnPassantTarget;
+    board.enPassantTarget = lastEnPassantTarget;
     
-    if(changeTurn) {
-        if(turn == WHITE) turn = BLACK;
-        else turn = WHITE;
-    }
+    if(board.turn == WHITE) board.turn = BLACK;
+    else board.turn = WHITE;
 }
 
-char makeMove(MoveNode move, int changeTurn) {
+char makeMove(MoveNode move) {
     char capture = ' ';
-    enPassantTarget = -1;
+    board.enPassantTarget = -1;
 
-    if(move.origin == 0) {
-        whiteQCastleRight = FALSE;
-    } else if(move.origin == 7) {
-        whiteKCastleRight = FALSE;
-    } else if(move.origin == 63) {
-        blackKCastleRight = FALSE;
-    } else if(move.origin == 56) {
-        blackQCastleRight = FALSE;
+    if(move.origin == 0 || move.dest == 0) {
+        board.whiteQCastleRight = FALSE;
+    } else if(move.origin == 7 || move.dest == 7) {
+        board.whiteKCastleRight = FALSE;
+    } else if(move.origin == 63 || move.dest == 63) {
+        board.blackKCastleRight = FALSE;
+    } else if(move.origin == 56 || move.dest == 56) {
+        board.blackQCastleRight = FALSE;
     }
 
     if(move.enPassantTarget != -1) {
-       Positions *movedPosition = getPositionsOfType(board[move.origin]);
-       Positions *capturedPosition = getPositionsOfType(board[move.enPassantTarget]);
+       Positions *movedPosition = getPositionsOfType(board.board[move.origin]);
+       Positions *capturedPosition = getPositionsOfType(board.board[move.enPassantTarget]);
        removePosition(capturedPosition, move.enPassantTarget);
        removePosition(movedPosition, move.origin);
        addPosition(movedPosition, move.dest);
 
-       board[move.dest] = board[move.origin];
-       board[move.origin] = ' ';
-       capture = board[move.enPassantTarget];
-       board[move.enPassantTarget] = ' ';
+       board.board[move.dest] = board.board[move.origin];
+       board.board[move.origin] = ' ';
+       capture = board.board[move.enPassantTarget];
+       board.board[move.enPassantTarget] = ' ';
     } else if(move.castle != NO_CASTLE) {
         if(move.castle == WHITE_KING_SIDE_CASTLE) {
-            board[7] = ' ';
-            board[4] = ' ';
-            board[6] = 'K';
-            board[5] = 'R';
-            whiteKing = 6;
-            whiteKCastleRight = FALSE;
-            removePosition(&whiteRooks, 7);
-            addPosition(&whiteRooks, 5);
+            board.board[7] = ' ';
+            board.board[4] = ' ';
+            board.board[6] = 'K';
+            board.board[5] = 'R';
+            board.whiteKing = 6;
+            board.whiteKCastleRight = FALSE;
+            board.whiteQCastleRight = FALSE;
+            removePosition(&board.whiteRooks, 7);
+            addPosition(&board.whiteRooks, 5);
         } else if(move.castle == WHITE_QUEEN_SIDE_CASTLE) {
-            board[0] = ' ';
-            board[4] = ' ';
-            board[2] = 'K';
-            board[3] = 'R';
-            whiteKing = 2;
-            whiteQCastleRight = FALSE;
-            removePosition(&whiteRooks, 0);
-            addPosition(&whiteRooks, 3);
+            board.board[0] = ' ';
+            board.board[4] = ' ';
+            board.board[2] = 'K';
+            board.board[3] = 'R';
+            board.whiteKing = 2;
+            board.whiteKCastleRight = FALSE;
+            board.whiteQCastleRight = FALSE;
+            removePosition(&board.whiteRooks, 0);
+            addPosition(&board.whiteRooks, 3);
         } else if(move.castle == BLACK_KING_SIDE_CASTLE) {
-            board[63] = ' ';
-            board[60] = ' ';
-            board[62] = 'k';
-            board[61] = 'r';
-            blackKing = 62;
-            blackKCastleRight = FALSE;
-            removePosition(&blackRooks, 63);
-            addPosition(&blackRooks, 61);
+            board.board[63] = ' ';
+            board.board[60] = ' ';
+            board.board[62] = 'k';
+            board.board[61] = 'r';
+            board.blackKing = 62;
+            board.blackKCastleRight = FALSE;
+            board.blackQCastleRight = FALSE;
+            removePosition(&board.blackRooks, 63);
+            addPosition(&board.blackRooks, 61);
         } else if(move.castle == BLACK_QUEEN_SIDE_CASTLE) {
-            board[56] = ' ';
-            board[60] = ' ';
-            board[58] = 'K';
-            board[59] = 'R';
-            blackKing = 58;
-            blackQCastleRight = FALSE;
-            removePosition(&blackRooks, 56);
-            addPosition(&blackRooks, 59);
+            board.board[56] = ' ';
+            board.board[60] = ' ';
+            board.board[58] = 'K';
+            board.board[59] = 'R';
+            board.blackKing = 58;
+            board.blackKCastleRight = FALSE;
+            board.blackQCastleRight = FALSE;
+            removePosition(&board.blackRooks, 56);
+            addPosition(&board.blackRooks, 59);
         }
     } else {
-        if(board[move.dest] != ' ' && board[move.dest] != 'K' && board[move.dest] != 'k') {
-            Positions *capturedPosition = getPositionsOfType(board[move.dest]);
+        if(board.board[move.dest] != ' ' && board.board[move.dest] != 'K' && board.board[move.dest] != 'k') {
+            Positions *capturedPosition = getPositionsOfType(board.board[move.dest]);
             removePosition(capturedPosition, move.dest);
-            capture = board[move.dest];
+            capture = board.board[move.dest];
         } else {
-            capture = board[move.dest];
+            capture = board.board[move.dest];
         }
-        if(board[move.origin] == 'K') {
-            whiteKCastleRight = FALSE;
-            whiteQCastleRight = FALSE;
-            whiteKing = move.dest;
-            capture = board[move.dest];
-            board[move.dest] = 'K';
-            board[move.origin] = ' ';  
-        } else if(board[move.origin] == 'k') {
-            blackKCastleRight = FALSE;
-            blackQCastleRight = FALSE;
-            blackKing = move.dest;
-            capture = board[move.dest];
-            board[move.dest] = 'k';
-            board[move.origin] = ' ';
+        if(board.board[move.origin] == 'K') {
+            board.whiteKCastleRight = FALSE;
+            board.whiteQCastleRight = FALSE;
+            board.whiteKing = move.dest;
+            capture = board.board[move.dest];
+            board.board[move.dest] = 'K';
+            board.board[move.origin] = ' ';  
+        } else if(board.board[move.origin] == 'k') {
+            board.blackKCastleRight = FALSE;
+            board.blackQCastleRight = FALSE;
+            board.blackKing = move.dest;
+            capture = board.board[move.dest];
+            board.board[move.dest] = 'k';
+            board.board[move.origin] = ' ';
         } else {
-            Positions *movedPosition = getPositionsOfType(board[move.origin]);
+            Positions *movedPosition = getPositionsOfType(board.board[move.origin]);
+            
             removePosition(movedPosition, move.origin);
             addPosition(movedPosition, move.dest);
 
-            board[move.dest] = board[move.origin];
-            board[move.origin] = ' ';
+            board.board[move.dest] = board.board[move.origin];
+            board.board[move.origin] = ' ';
 
-            if((board[move.dest] == 'p' || board[move.dest] == 'P') && abs(move.dest - move.origin) == 16) {
-                enPassantTarget = move.dest;
+            if((board.board[move.dest] == 'p' || board.board[move.dest] == 'P') && abs(move.dest - move.origin) == 16) {
+                board.enPassantTarget = move.dest;
             }
         }
     }
 
     if(move.promotion != NO_PROMOTION) {
-        Positions *pawnPosition = (turn == WHITE) ? &whitePawns : &blackPawns;
+        Positions *pawnPosition = (board.turn == WHITE) ? &board.whitePawns : &board.blackPawns;
         Positions *promotedPosition = getPositionsOfType(move.promotion);
         addPosition(promotedPosition, move.dest);
         removePosition(pawnPosition, move.dest);
-        board[move.dest] = move.promotion;
+        board.board[move.dest] = move.promotion;
     }
 
-    if(changeTurn) {
-        if(turn == WHITE) turn = BLACK;
-        else turn = WHITE;
-    }
+    if(board.turn == WHITE) board.turn = BLACK;
+    else board.turn = WHITE;
 
    return capture;
 }
@@ -797,23 +768,12 @@ void addMove3(Moves *moves, int origin, int destRank, int destFile, int *pathBlo
 
 void addEnPassantMove(Moves *moves, int origin, int dest) {
     if(origin >= 0 && origin < 64 && dest >= 0 && dest < 64) {
-        MoveNode *node;
-
-        node = (MoveNode *)calloc(1, sizeof(MoveNode));
-
+        MoveNode *node = allocDefaultMoveNode();
         node->origin = origin;
         node->dest = dest;
-        node->enPassantTarget = enPassantTarget;
-        node->castle = NO_CASTLE;
-        node->promotion = NO_PROMOTION;
-        if(moves->head == NULL) {
-            moves->head = node;
-            moves->tail = node;
-        } else {
-            moves->tail->next = node;
-            moves->tail = node;
-        }
-        moves->len ++;
+        node->enPassantTarget = board.enPassantTarget;
+
+        addMoveNode(moves, node);
     }
 }
 
@@ -845,54 +805,50 @@ Moves getPseudoLegalMoves(int colorToMove) {
 
     //castling
     if(colorToMove == WHITE) {
-        if(whiteKCastleRight && get(0, 5) == ' ' && get(0, 6) == ' ') {
+        if(board.whiteKCastleRight && get(0, 5) == ' ' && get(0, 6) == ' ') {
             addCastleMove(&moves, WHITE_KING_SIDE_CASTLE);
-        } else if(whiteQCastleRight && get(0, 3) == ' ' && get(0, 2) == ' ' && get(0, 1) == ' ') {
+        }
+        if(board.whiteQCastleRight && get(0, 3) == ' ' && get(0, 2) == ' ' && get(0, 1) == ' ') {
             addCastleMove(&moves, WHITE_QUEEN_SIDE_CASTLE);
         } 
     } else {
-        if(blackKCastleRight && get(7, 5) == ' ' && get(7, 6) == ' ') {
+        if(board.blackKCastleRight && get(7, 5) == ' ' && get(7, 6) == ' ') {
             addCastleMove(&moves, BLACK_KING_SIDE_CASTLE);
-        } else if(blackQCastleRight && get(7, 3) == ' ' && get(7, 2) == ' ' && get(7, 1) == ' ') {
+        }
+        if(board.blackQCastleRight && get(7, 3) == ' ' && get(7, 2) == ' ' && get(7, 1) == ' ') {
             addCastleMove(&moves, BLACK_QUEEN_SIDE_CASTLE);
         }
     }
 
     int perspective = (colorToMove == WHITE) ? 1 : -1;
     //pawn moves
-    PosNode *current = (colorToMove == WHITE) ? whitePawns.head : blackPawns.head;
+    PosNode *current = (colorToMove == WHITE) ? board.whitePawns.head : board.blackPawns.head;
     
     while(current != NULL) {
-        if(board[current->pos] == ' ') {
-            printf("Ghost pawn!!");
-        }
-        if(board[current->pos + perspective*8] == ' ') {
-            if(current->pos/8 == (3.5-perspective*2.5) && board[current->pos + perspective*16] == ' ') {
+        if(board.board[current->pos + perspective*8] == ' ') {
+            if(current->pos/8 == (3.5-perspective*2.5) && board.board[current->pos + perspective*16] == ' ') {
                 addPawnMove(&moves, current->pos, current->pos + perspective*16, colorToMove);
             }
             addPawnMove(&moves, current->pos, current->pos + perspective*8, colorToMove);
         }
-        if(current->pos%8 != (3.5-perspective*3.5) && canTake(board[current->pos + perspective*7], colorToMove)) {
+        if(current->pos%8 != (3.5-perspective*3.5) && canTake(board.board[current->pos + perspective*7], colorToMove)) {
             addPawnMove(&moves, current->pos, current->pos + perspective*7, colorToMove);
         }
 
-        if(current->pos%8 != (3.5+perspective*3.5) && canTake(board[current->pos + perspective*9], colorToMove)) {
+        if(current->pos%8 != (3.5+perspective*3.5) && canTake(board.board[current->pos + perspective*9], colorToMove)) {
             addPawnMove(&moves, current->pos, current->pos + perspective*9, colorToMove);
         }
-        if(current->pos%8 != (3.5+perspective*3.5) && current->pos + perspective*1 == enPassantTarget) {
+        if(current->pos%8 != (3.5+perspective*3.5) && current->pos + perspective*1 == board.enPassantTarget) {
             addEnPassantMove(&moves, current->pos, current->pos + perspective*9);
-        } else if(current->pos%8 != (3.5-perspective*3.5) && current->pos - perspective*1 == enPassantTarget) {
+        } else if(current->pos%8 != (3.5-perspective*3.5) && current->pos - perspective*1 == board.enPassantTarget) {
             addEnPassantMove(&moves, current->pos, current->pos + perspective*7);
         }
         current = current->next;
     }
 
     //knight moves
-    current = (colorToMove == WHITE) ? whiteKnights.head : blackKnights.head;
+    current = (colorToMove == WHITE) ? board.whiteKnights.head : board.blackKnights.head;
     while(current != NULL) {
-        if(board[current->pos] == ' ') {
-            printf("Ghost knight!!");
-        }
         int file = current->pos%8;
         int rank = current->pos/8;
         addMove2(&moves, current->pos, rank+1, file+2, colorToMove);      
@@ -906,11 +862,9 @@ Moves getPseudoLegalMoves(int colorToMove) {
         current = current->next;
     }
 
-    current = (colorToMove == WHITE) ? whiteBishops.head : blackBishops.head;
+    current = (colorToMove == WHITE) ? board.whiteBishops.head : board.blackBishops.head;
     while(current != NULL) {
-        if(board[current->pos] == ' ') {
-            printf("Ghost bishop!!");
-        }
+
         int file = current->pos%8;
         int rank = current->pos/8;
         int NEBlocked = FALSE;
@@ -918,7 +872,7 @@ Moves getPseudoLegalMoves(int colorToMove) {
         int SWBlocked = FALSE;
         int NWBlocked = FALSE;
 
-        for(int offset = 1; offset < 7; offset ++) {
+        for(int offset = 1; offset < 8; offset ++) {
             addMove3(&moves, current->pos, rank + offset, file + offset, &NEBlocked, colorToMove);
             addMove3(&moves, current->pos, rank - offset, file + offset, &SEBlocked, colorToMove);
             addMove3(&moves, current->pos, rank - offset, file - offset, &SWBlocked, colorToMove);
@@ -928,20 +882,17 @@ Moves getPseudoLegalMoves(int colorToMove) {
         current = current->next;
     }
 
-    current = (colorToMove == WHITE) ? whiteRooks.head : blackRooks.head;
+    current = (colorToMove == WHITE) ? board.whiteRooks.head : board.blackRooks.head;
     while(current != NULL) {
         int file = current->pos%8;
         int rank = current->pos/8;
-        if(board[current->pos] == ' ') {
-            printf("Ghost rook!!");
-        }
         
         int NBlocked = FALSE;
         int EBlocked = FALSE;
         int SBlocked = FALSE;
         int WBlocked = FALSE;
         
-        for(int offset = 1; offset < 7; offset ++) {
+        for(int offset = 1; offset < 8; offset ++) {
             addMove3(&moves, current->pos, rank + offset, file, &NBlocked, colorToMove);
             addMove3(&moves, current->pos, rank, file + offset, &EBlocked, colorToMove);
             addMove3(&moves, current->pos, rank - offset, file, &SBlocked, colorToMove);
@@ -951,11 +902,8 @@ Moves getPseudoLegalMoves(int colorToMove) {
         current = current->next;
     }
     
-    current = (colorToMove == WHITE) ? whiteQueens.head : blackQueens.head;
+    current = (colorToMove == WHITE) ? board.whiteQueens.head : board.blackQueens.head;
     while(current != NULL) {
-        if(board[current->pos] == ' ') {
-            printf("Ghost queen!!");
-        }
         int file = current->pos%8;
         int rank = current->pos/8;
 
@@ -969,7 +917,7 @@ Moves getPseudoLegalMoves(int colorToMove) {
         int SBlocked = FALSE;
         int WBlocked = FALSE;
         
-        for(int offset = 1; offset < 7; offset ++) {
+        for(int offset = 1; offset < 8; offset ++) {
             addMove3(&moves, current->pos, rank + offset, file + offset, &NEBlocked, colorToMove);
             addMove3(&moves, current->pos, rank - offset, file + offset, &SEBlocked, colorToMove);
             addMove3(&moves, current->pos, rank - offset, file - offset, &SWBlocked, colorToMove);
@@ -983,7 +931,7 @@ Moves getPseudoLegalMoves(int colorToMove) {
         current = current->next;
     }
 
-    int kingPos = (colorToMove == WHITE) ? whiteKing : blackKing;
+    int kingPos = (colorToMove == WHITE) ? board.whiteKing : board.blackKing;
     int kingRank = kingPos/8;
     int kingFile = kingPos%8;
 
@@ -991,7 +939,6 @@ Moves getPseudoLegalMoves(int colorToMove) {
     addMove2(&moves, kingPos, kingRank + 1, kingFile, colorToMove);
     addMove2(&moves, kingPos, kingRank + 1, kingFile - 1, colorToMove);
     addMove2(&moves, kingPos, kingRank + 0, kingFile + 1, colorToMove);
-    addMove2(&moves, kingPos, kingRank + 0, kingFile, colorToMove);
     addMove2(&moves, kingPos, kingRank + 0, kingFile - 1, colorToMove);
     addMove2(&moves, kingPos, kingRank - 1, kingFile + 1, colorToMove);
     addMove2(&moves, kingPos, kingRank - 1, kingFile, colorToMove);
@@ -1004,9 +951,9 @@ int inCheck(int player, Moves opponentMoves) {
 
     int kingPos;
     if(player == WHITE) {
-        kingPos = whiteKing;
+        kingPos = board.whiteKing;
     } else {
-        kingPos = blackKing;
+        kingPos = board.blackKing;
     }
 
     MoveNode *current = opponentMoves.head;
@@ -1022,18 +969,25 @@ int inCheck(int player, Moves opponentMoves) {
 
 int fullyLegalMove(MoveNode move) {
 
-    int lastEnPassantTarget = enPassantTarget;
-    int lastWhiteKCastleRight = whiteKCastleRight;
-    int lastWhiteQCastleRight = whiteQCastleRight;
-    int lastBlackKCastleRight = blackKCastleRight;
-    int lastBlackQCastleRight = blackQCastleRight;
-    int lastCapture = makeMove(move, FALSE);
-    Moves opponentMoves = getPseudoLegalMoves((turn == WHITE) ? BLACK : WHITE);
+    
     int legal = TRUE;
     if(move.castle == NO_CASTLE) {
-        legal = 1 - inCheck(turn, opponentMoves);
+        int lastEnPassantTarget = board.enPassantTarget;
+        int lastWhiteKCastleRight = board.whiteKCastleRight;
+        int lastWhiteQCastleRight = board.whiteQCastleRight;
+        int lastBlackKCastleRight = board.blackKCastleRight;
+        int lastBlackQCastleRight = board.blackQCastleRight;
+        int lastCapture = makeMove(move); 
+        Moves opponentMoves = getPseudoLegalMoves(board.turn);
+        legal = 1 - inCheck((board.turn == WHITE) ? BLACK : WHITE, opponentMoves);
+        unMakeMove(move, lastCapture, lastEnPassantTarget);
+        board.whiteKCastleRight = lastWhiteKCastleRight;
+        board.whiteQCastleRight = lastWhiteQCastleRight;
+        board.blackKCastleRight = lastBlackKCastleRight;
+        board.blackQCastleRight = lastBlackQCastleRight;
     } else {
         int safe[3];
+        Moves opponentMoves = getPseudoLegalMoves((board.turn == WHITE) ? BLACK : WHITE);
         if(move.castle == WHITE_KING_SIDE_CASTLE) {
             safe[0] = 4;
             safe[1] = 5;
@@ -1051,9 +1005,9 @@ int fullyLegalMove(MoveNode move) {
             safe[1] = 59;
             safe[2] = 58;
         }
-
         MoveNode *current = opponentMoves.head;
         while(current != NULL) {
+            
             if(safe[0] == current->dest || safe[1] == current->dest || safe[2] == current->dest) {
                 legal = FALSE;
                 break;
@@ -1062,18 +1016,12 @@ int fullyLegalMove(MoveNode move) {
         }
     }
 
-    unMakeMove(move, lastCapture, lastEnPassantTarget, FALSE);
-    whiteKCastleRight = lastWhiteKCastleRight;
-    whiteQCastleRight = lastWhiteQCastleRight;
-    blackKCastleRight = lastBlackKCastleRight;
-    blackQCastleRight = lastBlackQCastleRight;
-
     return legal;
 }
 
 Moves getLegalMoves() {
 
-    Moves pseudoLegalMoves = getPseudoLegalMoves(turn);
+    Moves pseudoLegalMoves = getPseudoLegalMoves(board.turn);
     Moves fullyLegalMoves = {
         .len = 0,
         .head = NULL,
@@ -1112,14 +1060,17 @@ MoveNode parseMove(char **args) {
     move.promotion = NO_PROMOTION;
 
     if(strcmp(args[1], "O-O-O") == 0) {
-        move.castle = (turn == WHITE) ? WHITE_QUEEN_SIDE_CASTLE : BLACK_QUEEN_SIDE_CASTLE;
+        move.castle = (board.turn == WHITE) ? WHITE_QUEEN_SIDE_CASTLE : BLACK_QUEEN_SIDE_CASTLE;
     } else if(strcmp(args[1], "O-O") == 0) {
-        move.castle = (turn == WHITE) ? WHITE_KING_SIDE_CASTLE : BLACK_KING_SIDE_CASTLE;
-        move.dest = parseSquare(args[3]);       
+        move.castle = (board.turn == WHITE) ? WHITE_KING_SIDE_CASTLE : BLACK_KING_SIDE_CASTLE;
     } else if(strcmp(args[1], "promote") == 0) {
         move.origin = parseSquare(args[2]);
         move.dest = parseSquare(args[3]);
         move.promotion = args[4][0];
+    } else if(strcmp(args[1], "ep")  == 0) {
+        move.enPassantTarget = board.enPassantTarget;
+        move.origin = parseSquare(args[2]);
+        move.dest = parseSquare(args[3]);
     } else {
         move.origin = parseSquare(args[1]);
         move.dest = parseSquare(args[2]);       
@@ -1129,16 +1080,123 @@ MoveNode parseMove(char **args) {
 }
 
 void makeRandomMove() {
-    Moves moves = getLegalMoves(turn);
+    Moves moves = getLegalMoves();
     if(moves.len != 0) {
         int index = (int)((rand() / (double)RAND_MAX) * moves.len);
+        printf("Index: %d", index);
         MoveNode *curr = moves.head;
         for(int i = 0; i < index; i ++) {
             curr = curr->next;
         }
-        makeMove(*curr, TRUE);
+        makeMove(*curr);
     }
 }
+
+int countMoves(int depth) {
+    Moves moves = getLegalMoves();
+    int numMoves = 0;
+    if(depth == 0) {
+        MoveNode *current = moves.head;
+        while(current != NULL) {
+            char origin[3];
+            char dest[3];
+            char ep[3];
+            getSquareChar(current->origin, origin);
+            getSquareChar(current->dest, dest);
+            if(current->enPassantTarget != -1) {
+                getSquareChar(current->enPassantTarget, ep);
+            } else {
+                ep[0] = '-'; ep[1] = '1'; ep[2] = '\0';
+            }
+            current = current->next;
+        }
+        return moves.len;
+    } else {
+        MoveNode *current = moves.head;
+        while(current != NULL) {
+            int lastWhiteKCastleRight = board.whiteKCastleRight;
+            int lastWhiteQCaslteRight = board.whiteQCastleRight;
+            int lastBlackKCastleRight = board.blackKCastleRight;
+            int lastBlackQCastleRight = board.blackQCastleRight;
+            int lastEnPassantTarget = board.enPassantTarget;
+            
+            int capture = makeMove(*current);
+            numMoves += countMoves(depth-1);
+            unMakeMove(*current, capture, lastEnPassantTarget);
+
+            board.whiteKCastleRight = lastWhiteKCastleRight;
+            board.whiteQCastleRight = lastWhiteQCaslteRight;
+            board.blackKCastleRight = lastBlackKCastleRight;
+            board.blackQCastleRight = lastBlackQCastleRight;
+
+            current = current->next;
+        }
+    }
+
+    return numMoves;
+}
+
+/*
+36: 1
+39: 3
+41: 4
+42: 11
+43: 20
+44: 6
+45: 2
+46: 1
+*/
+
+/*
+Nodes: 43
+Nodes: 43
+Nodes: 41
+Nodes: 46
+Nodes: 44
+Nodes: 44
+Nodes: 42
+Nodes: 42
+Nodes: 42
+Nodes: 43
+Nodes: 42
+Nodes: 45
+Nodes: 44
+Nodes: 42
+Nodes: 45
+Nodes: 42
+Nodes: 43
+Nodes: 42
+Nodes: 42
+Nodes: 39
+Nodes: 42
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 42
+Nodes: 41
+Nodes: 44
+Nodes: 44
+Nodes: 42
+Nodes: 41
+Nodes: 39
+Nodes: 37
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 43
+Nodes: 45
+Nodes: 43
+Nodes: 42
+Nodes: 39
+Nodes: 43
+Nodes: 43
+*/
 
 int execute(char *command) {
 
@@ -1153,17 +1211,17 @@ int execute(char *command) {
         printBoard();
     } else if(strcmp(args[0], "move") == 0) {
 
-        prevBlackKCastleRight = blackKCastleRight;
-        prevBlackQCastleRight = blackQCastleRight;
-        prevWhiteKCastleRight = whiteKCastleRight;
-        prevWhiteQCastleRight = whiteQCastleRight;
+        prevBlackKCastleRight = board.blackKCastleRight;
+        prevBlackQCastleRight = board.blackQCastleRight;
+        prevWhiteKCastleRight = board.whiteKCastleRight;
+        prevWhiteQCastleRight = board.whiteQCastleRight;
 
         Moves moves = getLegalMoves();
         MoveNode move = parseMove(args);
         if(containsMove(moves, move)) {
             lastMove = move;
-            prevEnPassantTarget = enPassantTarget;
-            prevCapturedPiece = makeMove(move, TRUE);
+            prevEnPassantTarget = board.enPassantTarget;
+            prevCapturedPiece = makeMove(move);
             printBoard();
         } else {
             printf("Illegal Move\n");
@@ -1172,21 +1230,21 @@ int execute(char *command) {
     } else if(strcmp(args[0], "quit") == 0) {
         return TRUE;
     } else if(strcmp(args[0], "info") == 0) {
-        printf((turn == WHITE) ? "\nWhite to move\n" : "\nBlack to move\n");
-        printf("BlackKCastleRight: %d \n", blackKCastleRight);
-        printf("BlackQCastleRight: %d \n", blackQCastleRight);
-        printf("WhiteKCastleRight: %d \n", whiteKCastleRight);
-        printf("WhiteQCastleRight: %d \n", whiteQCastleRight);
-        printf("En Passant Target: %d \n", enPassantTarget);
-        printf("Half Moves Completed: %d \n", halfMoves);
-        printf("Full Move Clock: %d \n\n", fullMoves);
+        printf((board.turn == WHITE) ? "\nWhite to move\n" : "\nBlack to move\n");
+        printf("BlackKCastleRight: %d \n", board.blackKCastleRight);
+        printf("BlackQCastleRight: %d \n", board.blackQCastleRight);
+        printf("WhiteKCastleRight: %d \n", board.whiteKCastleRight);
+        printf("WhiteQCastleRight: %d \n", board.whiteQCastleRight);
+        printf("En Passant Target: %d \n", board.enPassantTarget);
+        printf("Half Moves Completed: %d \n", board.halfMoves);
+        printf("Full Move Clock: %d \n\n", board.fullMoves);
     } else if(strcmp(args[0], "board") == 0) {
         printBoard();
     } else if(strcmp(args[0], "moves") == 0) {
         struct timeval tv;
         gettimeofday(&tv,NULL);
         unsigned long time_in_micros_1 = 1000000 * tv.tv_sec + tv.tv_usec;
-        Moves moves = getLegalMoves(turn);
+        Moves moves = getLegalMoves();
         gettimeofday(&tv,NULL);
         unsigned long time_in_micros_2 = 1000000 * tv.tv_sec + tv.tv_usec;
         printf("Time: %ld\n", time_in_micros_2 - time_in_micros_1);
@@ -1195,27 +1253,27 @@ int execute(char *command) {
     } else if(strcmp(args[0], "positions") == 0) {
 
         printf("White \n");
-        printf("Pawns: "); printPositions(whitePawns);
-        printf("Knights: "); printPositions(whiteKnights);
-        printf("Bishops: "); printPositions(whiteBishops);
-        printf("Rooks: "); printPositions(whiteRooks);
-        printf("Queens: "); printPositions(whiteQueens);
+        printf("Pawns: "); printPositions(board.whitePawns);
+        printf("Knights: "); printPositions(board.whiteKnights);
+        printf("Bishops: "); printPositions(board.whiteBishops);
+        printf("Rooks: "); printPositions(board.whiteRooks);
+        printf("Queens: "); printPositions(board.whiteQueens);
         
         printf("Black \n");
-        printf("Pawns: "); printPositions(blackPawns);
-        printf("Knights: "); printPositions(blackKnights);
-        printf("Bishops: "); printPositions(blackBishops);
-        printf("Rooks: "); printPositions(blackRooks);
-        printf("Queens: "); printPositions(blackQueens);
+        printf("Pawns: "); printPositions(board.blackPawns);
+        printf("Knights: "); printPositions(board.blackKnights);
+        printf("Bishops: "); printPositions(board.blackBishops);
+        printf("Rooks: "); printPositions(board.blackRooks);
+        printf("Queens: "); printPositions(board.blackQueens);
     } else if(strcmp(args[0], "undo") == 0) {
-        unMakeMove(lastMove, prevCapturedPiece, prevEnPassantTarget, TRUE);
-        whiteKCastleRight = prevWhiteKCastleRight;
-        whiteQCastleRight = prevWhiteQCastleRight;
-        blackKCastleRight = prevBlackKCastleRight;
-        blackQCastleRight = prevBlackQCastleRight;
+        unMakeMove(lastMove, prevCapturedPiece, prevEnPassantTarget);
+        board.whiteKCastleRight = prevWhiteKCastleRight;
+        board.whiteQCastleRight = prevWhiteQCastleRight;
+        board.blackKCastleRight = prevBlackKCastleRight;
+        board.blackQCastleRight = prevBlackQCastleRight;
         printBoard();
     } else if(strcmp(args[0], "check") == 0) {
-        printf("In check: %d", inCheck(turn, getPseudoLegalMoves((turn == WHITE) ? BLACK : WHITE)));
+        printf("In check: %d", inCheck(board.turn, getPseudoLegalMoves((board.turn == WHITE) ? BLACK : WHITE)));
     } else if(strcmp(args[0], "rand") == 0) {
         int moves = atoi(args[1]);
         printf("Moves: %d", moves);
@@ -1224,18 +1282,58 @@ int execute(char *command) {
         }
         printBoard();
     } else if(strcmp(args[0], "stress") == 0) {
+        loadFENStr(args[2]);
         Moves moves = getLegalMoves();
         int numMoves = atoi(args[1]);
         MoveNode *curr = moves.head;
-        while(curr != NULL) {
-            makeMove(*curr, TRUE);
+        int randCalls = 0;
+        while(curr != NULL) {    
+            makeMove(*curr);
+            printBoard();
+            printf("Rand calls: %d", randCalls);
+            printf("White \n");
+            printf("Pawns: "); printPositions(board.whitePawns);
+            printf("Knights: "); printPositions(board.whiteKnights);
+            printf("Bishops: "); printPositions(board.whiteBishops);
+            printf("Rooks: "); printPositions(board.whiteRooks);
+            printf("Queens: "); printPositions(board.whiteQueens);
+            
+            printf("Black \n");
+            printf("Pawns: "); printPositions(board.blackPawns);
+            printf("Knights: "); printPositions(board.blackKnights);
+            printf("Bishops: "); printPositions(board.blackBishops);
+            printf("Rooks: "); printPositions(board.blackRooks);
+            printf("Queens: "); printPositions(board.blackQueens);
             for(int i = 0; i < numMoves; i ++) {
                 makeRandomMove();
+                randCalls ++;
             }
-            printBoard();
-            loadFENStr(STARTING_POS);
+            //printBoard();
+            loadFENStr(args[2]);
             curr = curr->next;
         }
+    } else if(strcmp(args[0], "perft") == 0) {
+        printf("Nodes: %d\n", countMoves(atoi(args[1])));
+        moveCount = 0;
+    } else if(strcmp(args[0], "break") == 0) {
+        for(int i = 0; i < 1000; i ++) {
+            makeRandomMove();
+        }
+        loadFENStr("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8");
+        for(int i = 0; i < atoi(args[1]); i ++) {
+            makeRandomMove();
+            printBoard();
+        }
+    } else if(strcmp(args[0], "opponentMoves") == 0) {
+        struct timeval tv;
+        gettimeofday(&tv,NULL);
+        unsigned long time_in_micros_1 = 1000000 * tv.tv_sec + tv.tv_usec;
+        Moves moves = getPseudoLegalMoves((board.turn == WHITE) ? BLACK : WHITE);
+        gettimeofday(&tv,NULL);
+        unsigned long time_in_micros_2 = 1000000 * tv.tv_sec + tv.tv_usec;
+        printf("Time: %ld\n", time_in_micros_2 - time_in_micros_1);
+        
+        printMoves(moves);
     }
 
     return FALSE;
@@ -1261,19 +1359,10 @@ int main() {
     printf("     CCC::::::::::::C a::::::::::aa:::ar:::::r           l::::::lS:::::::::::::::SS I::::::::IM::::::M               M::::::M\n");
     printf("        CCCCCCCCCCCCC  aaaaaaaaaa  aaaarrrrrrr           llllllll SSSSSSSSSSSSSSS   IIIIIIIIIIMMMMMMMM               MMMMMMMM\n");
     printf("\n-----------------------------------------------------------------------------------------------------------------------------\n\n\n");
+
     loadFENStr(STARTING_POS);
-
-    for(int rank = 7; rank >= 0; rank --) {
-        printf("    +---+---+---+---+---+---+---+---+\n");
-        printf("(%d) ", rank+1);
-        for(int file = 0; file < 8; file ++) {
-            printf("| %c ", get(rank, file));
-        }
-        printf("|\n");
-    }
-    printf("    +---+---+---+---+---+---+---+---+\n");
-    printf("     (a) (b) (c) (d) (e) (f) (g) (h)\n\n");
-
+    printBoard();
+    
     char *command = NULL;
     size_t len = 0;
 
