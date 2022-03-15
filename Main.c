@@ -74,6 +74,7 @@ typedef struct PinNode_s {
     struct PinNode_s *next;
     Positions* pinLine;
     int pieceIndex; 
+    int enPassantOnly;
 } PinNode;
 
 typedef struct Pins_s {
@@ -110,6 +111,7 @@ typedef struct Board_s {
     int blackKing;
 
     Pins pins;
+    Pins checkers;
     Positions attackedSquares;
 
 } Board;
@@ -126,6 +128,23 @@ int prevWhiteKCastleRight;
 int prevWhiteQCastleRight;
 
 int moveCount;
+
+int memCount = 0;
+
+void *fred(int members, int size) {
+    memCount ++;
+    return calloc(members, size);
+}
+
+void *bill(int size) {
+    memCount ++;
+    return malloc(size);
+}
+
+void keel(void *ptr) {
+    memCount--;
+    free(ptr);
+}
 
 int inBounds(int rank, int file) {
     return rank >= 0 && rank < 8 && file >= 0 && file < 8;
@@ -217,7 +236,7 @@ void addMoveNode(Moves *moves, MoveNode *node) {
 
 MoveNode *allocDefaultMoveNode() {
     MoveNode *node;
-    node = (MoveNode *)calloc(1, sizeof(MoveNode));
+    node = (MoveNode *)fred(1, sizeof(MoveNode));
 
     node->origin = -1;
     node->dest = -1;
@@ -287,9 +306,7 @@ void printMoves(Moves moves) {
 
 void addPosition(Positions *positions, int pos) {
     PosNode *node;
-
-    node = (PosNode *)calloc(1, sizeof(PosNode));
-    
+    node = (PosNode *)fred(1, sizeof(PosNode));
     node->pos = pos;
     if(positions->head == NULL) {
         positions->head = node;
@@ -301,11 +318,24 @@ void addPosition(Positions *positions, int pos) {
     positions->len ++;
 }
 
+void clearMoves(Moves *moves) {
+    MoveNode *current = moves->head;
+    while(current != NULL) {   
+        MoveNode *next = current->next;
+        keel(current);
+        current = next;
+    }
+    moves->len = 0;
+    moves->head = NULL;
+    moves->tail = NULL;
+}
+
+
 void clearPositions(Positions *positions) {
     PosNode *current = positions->head;
     while(current != NULL) {   
         PosNode *next = current->next;
-        free(current);
+        keel(current);
         current = next;
     }
     positions->len = 0;
@@ -313,10 +343,23 @@ void clearPositions(Positions *positions) {
     positions->tail = NULL;
 }
 
+void clearPins(Pins *pins) {
+    PinNode *current = pins->head;
+    while(current != NULL) {   
+        PinNode *next = current->next;
+        if(current->pinLine != NULL) clearPositions(current->pinLine);
+        keel(current);
+        current = next;
+    }
+    pins->len = 0;
+    pins->head = NULL;
+    pins->tail = NULL;
+}
 
 void removePosition(Positions *positions, int pos) {
     PosNode *current = positions->head;
     PosNode *last = NULL;
+    
     while(current != NULL) {
         if(current->pos == pos) {
             positions->len --;
@@ -326,7 +369,7 @@ void removePosition(Positions *positions, int pos) {
                 last->next = current->next;
                 if(last->next == NULL) positions->tail = last;
             }
-            free(current);
+            keel(current);
             break;
         }
         last = current;
@@ -339,8 +382,8 @@ char **init()
 
     char **ret;
 
-    ret = (char **)calloc(1, MAX_ARG_COUNT * sizeof(char *));
-    *(ret + 0) = (char *)calloc(1, MAX_ARG_COUNT * (MAX_ARG_LENGTH + 1) * sizeof(char));
+    ret = (char **)fred(1, MAX_ARG_COUNT * sizeof(char *));
+    *(ret + 0) = (char *)fred(1, MAX_ARG_COUNT * (MAX_ARG_LENGTH + 1) * sizeof(char));
     for (int i = 0; i < MAX_ARG_COUNT; i++)
     {
         *(ret + i) = (*ret + (MAX_ARG_LENGTH + 1) * i);
@@ -714,7 +757,7 @@ void unMakeMove(MoveNode move, unsigned char capturedPiece, int lastEnPassantTar
 unsigned char makeMove(MoveNode move) {
     unsigned char capture = EMPTY;
     board.enPassantTarget = -1;
-
+    
     if(move.origin == 0 || move.dest == 0) {
         board.whiteQCastleRight = FALSE;
     } else if(move.origin == 7 || move.dest == 7) {
@@ -801,16 +844,21 @@ unsigned char makeMove(MoveNode move) {
             board.board[move.dest] = BLACK | KING;
             board.board[move.origin] = EMPTY;
         } else {
+            
             Positions *movedPosition = getPositionsOfType(board.board[move.origin]);
             removePosition(movedPosition, move.origin);
             addPosition(movedPosition, move.dest);
-
+            
             board.board[move.dest] = board.board[move.origin];
             board.board[move.origin] = EMPTY;
 
             if(piece(board.board[move.dest]) == PAWN && abs(move.dest - move.origin) == 16) {
-                board.enPassantTarget = move.dest;
+                int epPiece = (PAWN | inv(color(board.board[move.dest])));
+                if((move.dest % 8 != 0 && board.board[move.dest-1] == epPiece) || (move.dest % 8 != 7 && board.board[move.dest+1] == epPiece)) {
+                    board.enPassantTarget = move.dest;
+                }
             }
+            
         }
     }
 
@@ -823,7 +871,7 @@ unsigned char makeMove(MoveNode move) {
     }
 
     board.turn = inv(board.turn);
-   return capture;
+    return capture;
 }
 
 int split (const char *txt, char delim, char ***tokens)
@@ -832,21 +880,21 @@ int split (const char *txt, char delim, char ***tokens)
     char **arr, *p = (char *) txt;
 
     while (*p != '\0') if (*p++ == delim) count += 1;
-    t = tklen = calloc (count, sizeof (int));
+    t = tklen = fred (count, sizeof (int));
     for (p = (char *) txt; *p != '\0'; p++) *p == delim ? *t++ : (*t)++;
-    *tokens = arr = malloc (count * sizeof (char *));
+    *tokens = arr = bill (count * sizeof (char *));
     t = tklen;
-    p = *arr++ = calloc (*(t++) + 1, sizeof (char *));
+    p = *arr++ = fred (*(t++) + 1, sizeof (char *));
     while (*txt != '\0')
     {
         if (*txt == delim)
         {
-            p = *arr++ = calloc (*(t++) + 1, sizeof (char *));
+            p = *arr++ = fred (*(t++) + 1, sizeof (char *));
             txt++;
         }
         else *p++ = *txt++;
     }
-    free (tklen);
+    keel (tklen);
     return count;
 }
 
@@ -907,70 +955,110 @@ void addMoveRay(Moves *moves, int origin, int dRank, int dFile, int checkDestCol
 int containsPosition(Positions positions, int pos) {
     PosNode *current = positions.head;
     while(current != NULL) {
-        if(current->pos == pos) return TRUE;
+        if(current->pos == pos) {
+            return TRUE;
+        }
         current = current->next;
     }
 
     return FALSE;
 }
 
-void addPositionNoDuplicates(Positions *attackedSquares, int pos) {
+void addPositionNoDuplicates(Positions *attackedSquares, Pins *checkers, int pos, int origin) {
+    if(board.board[pos] == (board.turn | KING)) {
+        PinNode *node = (PinNode *) bill(sizeof(PinNode));
+        node->next = NULL;
+        node->pinLine = NULL;
+        node->enPassantOnly = FALSE;
+        node->pieceIndex = origin;
+        addPin(checkers, node);
+    }
     if(!containsPosition(*attackedSquares, pos)) {
         addPosition(attackedSquares, pos);
     }
 }
 
-void computeRay(Positions *attackedPositions, Pins *pins, int origin, int dRank, int dFile) {
+void computeRay(Positions *attackedPositions, Pins *checkers, Pins *pins, int origin, int dRank, int dFile) {
     int rank = origin / 8 + dRank;
     int file = origin % 8 + dFile;
     int colorToMove = color(board.board[origin]);
-    int pathBlocked = FALSE;
-    int pinExists = FALSE;
-    int pinBlocked = FALSE;
-    int pinnedIndex = -1;
-    Positions *pinLine = (Positions *) calloc(1, sizeof(Positions));
+    int pathBlocked = FALSE; //set to true when running into any piece besides king
+    int pinExists = FALSE; //set to true when pathBlocked = true and you run into king
+    int pinBlocked = FALSE; //set to true when pathBlocked = true and you run into anything
+    int checkExists = FALSE; //set to true when pathBlocked = false and you run into king  
+    int index = -1; //set to true when you run into piece besides king
+    int enPassantOnly = FALSE;
+    Positions *pinLine = (Positions *) fred(1, sizeof(Positions));
+    Positions *checkLine = (Positions *) fred(1, sizeof(Positions));
+    addPosition(checkLine, origin);
+    addPosition(pinLine, origin);
     while(inBounds(rank, file)) {
         if(!pathBlocked) {
-            if(get(rank, file) != EMPTY) pathBlocked = TRUE;
-            if(color(get(rank, file)) != inv(colorToMove)) addPositionNoDuplicates(attackedPositions, index(rank, file));
-            else pinnedIndex = index(rank, file);
-        } else if(pinnedIndex != -1 && pathBlocked && !pinBlocked) {
+            if(!enPassantOnly) addPosition(attackedPositions, index(rank, file));
+            addPosition(pinLine, index(rank, file));
+            if(!checkExists) addPosition(checkLine, index(rank, file));
+            if(index(rank, file) == board.enPassantTarget) {
+                enPassantOnly = TRUE;
+            } else if(get(rank, file) != EMPTY && get(rank, file) != (KING | inv(colorToMove))) {
+                pathBlocked = TRUE;
+                index = index(rank, file);
+            } else if(get(rank, file) == (KING | inv(colorToMove))) {
+                index = origin;
+                checkExists = TRUE;
+            }
+        } else if(!pinBlocked) {
+            if(index(rank, file) == board.enPassantTarget) {
+                enPassantOnly = TRUE;
+            } else if(get(rank, file) != EMPTY) {
+                pinBlocked = TRUE;
+                pinExists = FALSE;
+            }
             if(get(rank, file) == (KING | inv(colorToMove))) {
                 pinExists = TRUE;
-                pinBlocked = TRUE;
-            } else if(get(rank, file) != EMPTY) {
-                pinExists = FALSE;
-                pinBlocked = TRUE;
-            } else {
-                addPosition(pinLine, index(rank, file));
             }
+            addPosition(pinLine, index(rank, file));
         }
-        if(pathBlocked && pinBlocked) break;
         rank += dRank;
         file += dFile;
     }
 
-    PinNode *node = malloc(sizeof(PinNode));
+    
     if(pinExists) {
+        PinNode *node = bill(sizeof(PinNode));
         node->pinLine = pinLine;
-        node->pieceIndex = pinnedIndex;
+        node->pieceIndex = index;
         node->next = NULL;
+        node->enPassantOnly = enPassantOnly;
         addPin(pins, node);
+    } else {
+        clearPositions(pinLine);
+        keel(pinLine);
+    }
+    if(checkExists) {
+        PinNode *node = bill(sizeof(PinNode));
+        node->pinLine = checkLine;
+        node->pieceIndex = index;
+        node->next = NULL;
+        node->enPassantOnly = FALSE;
+        addPin(checkers, node);
+    } else {
+        clearPositions(checkLine);
+        keel(checkLine);
     }
 }
 
-void computeDiagonalRays(Positions *attackedPositions, Pins *pins, int origin) {
-    computeRay(attackedPositions, pins, origin, 1, 1);
-    computeRay(attackedPositions, pins, origin, 1, -1);
-    computeRay(attackedPositions, pins, origin, -1, 1);
-    computeRay(attackedPositions, pins, origin, -1, -1);
+void computeDiagonalRays(Positions *attackedPositions, Pins *checkers, Pins *pins, int origin) {
+    computeRay(attackedPositions, checkers, pins, origin, 1, 1);
+    computeRay(attackedPositions, checkers, pins, origin, 1, -1);
+    computeRay(attackedPositions, checkers, pins, origin, -1, 1);
+    computeRay(attackedPositions, checkers, pins, origin, -1, -1);
 }
 
-void computeSlidingRays(Positions *attackedPositions, Pins *pins, int origin) {
-    computeRay(attackedPositions, pins, origin, 1, 0);
-    computeRay(attackedPositions, pins, origin, 0, 1);
-    computeRay(attackedPositions, pins, origin, -1, 0);
-    computeRay(attackedPositions, pins, origin, 0, -1);
+void computeSlidingRays(Positions *attackedPositions, Pins *checkers, Pins *pins, int origin) {
+    computeRay(attackedPositions, checkers, pins, origin, 1, 0);
+    computeRay(attackedPositions, checkers, pins, origin, 0, 1);
+    computeRay(attackedPositions, checkers, pins, origin, -1, 0);
+    computeRay(attackedPositions, checkers, pins, origin, 0, -1);
 }
 
 void addDiagonalMoves(Moves *moves, int origin, int checkDestColor) {
@@ -987,16 +1075,15 @@ void addSlidingMoves(Moves *moves, int origin, int checkDestColor) {
     addMoveRay(moves, origin, 0, -1, checkDestColor);
 }
 
-void getAttackedSquaresAndPins(Positions *attackedSquares, Pins *pins) {
-    Positions pawns = (board.turn == WHITE) ? board.whitePawns : board.blackPawns;
-    int perspective = (board.turn == WHITE) ? 1 : -1;
-    PosNode *current = pawns.head;
+void getAttackedSquaresPinsAndCheckers(Positions *attackedSquares, Pins *pins, Pins *checkers) {
+    PosNode *current = (board.turn == WHITE) ? board.blackPawns.head : board.whitePawns.head;
+    int perspective = (board.turn == WHITE) ? -1 : 1;
     while(current != NULL) {
-        if(current->pos%8 != (3.5-perspective*3.5) && color(board.board[current->pos + perspective*7]) != inv(board.turn)) {
-            addPositionNoDuplicates(attackedSquares, current->pos + perspective*7);
+        if(current->pos%8 != (3.5-perspective*3.5)) {
+            addPositionNoDuplicates(attackedSquares, checkers, current->pos + perspective*7, current->pos);
         }
-        if(current->pos%8 != (3.5+perspective*3.5) && color(board.board[current->pos + perspective*7]) != inv(board.turn)) {
-            addPositionNoDuplicates(attackedSquares, current->pos + perspective*9);
+        if(current->pos%8 != (3.5+perspective*3.5)) {
+            addPositionNoDuplicates(attackedSquares, checkers, current->pos + perspective*9, current->pos);
         }
         current = current->next;
     }
@@ -1005,48 +1092,48 @@ void getAttackedSquaresAndPins(Positions *attackedSquares, Pins *pins) {
     while(current != NULL) {
         int file = current->pos%8;
         int rank = current->pos/8;
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank+1, file+2));      
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank+2, file+1));
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank-1, file+2));
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank-2, file+1));
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank+1, file-2));
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank+2, file-1));
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank-1, file-2));
-        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, index(rank-2, file-1));
+        if(inBounds(rank+1, file+2)) addPositionNoDuplicates(attackedSquares, checkers, index(rank+1, file+2), current->pos);      
+        if(inBounds(rank+2, file+1)) addPositionNoDuplicates(attackedSquares, checkers, index(rank+2, file+1), current->pos);
+        if(inBounds(rank-1, file+2)) addPositionNoDuplicates(attackedSquares, checkers, index(rank-1, file+2), current->pos);
+        if(inBounds(rank-2, file+1)) addPositionNoDuplicates(attackedSquares, checkers, index(rank-2, file+1), current->pos);
+        if(inBounds(rank+1, file-2)) addPositionNoDuplicates(attackedSquares, checkers, index(rank+1, file-2), current->pos);
+        if(inBounds(rank+2, file-1)) addPositionNoDuplicates(attackedSquares, checkers, index(rank+2, file-1), current->pos);
+        if(inBounds(rank-1, file-2)) addPositionNoDuplicates(attackedSquares, checkers, index(rank-1, file-2), current->pos);
+        if(inBounds(rank-2, file-1)) addPositionNoDuplicates(attackedSquares, checkers, index(rank-2, file-1), current->pos);
         current = current->next;
     }
 
-    current = (board.turn == WHITE) ? board.whiteBishops.head : board.blackBishops.head;
+    current = (board.turn == WHITE) ? board.blackBishops.head : board.whiteBishops.head;
     while(current != NULL) {
-        computeDiagonalRays(attackedSquares, pins, current->pos);
+        computeDiagonalRays(attackedSquares, checkers, pins, current->pos);
         current = current->next;
     }
 
-    current = (board.turn == WHITE) ? board.whiteRooks.head : board.blackRooks.head;
+    current = (board.turn == WHITE) ? board.blackRooks.head : board.whiteRooks.head;
     while(current != NULL) {
-        computeSlidingRays(attackedSquares, pins, current->pos);
+        computeSlidingRays(attackedSquares, checkers, pins, current->pos);
         current = current->next;
     }
     
-    current = (board.turn == WHITE) ? board.whiteQueens.head : board.blackQueens.head;
+    current = (board.turn == WHITE) ? board.blackQueens.head : board.whiteQueens.head;
     while(current != NULL) {
-        computeDiagonalRays(attackedSquares, pins, current->pos);
-        computeSlidingRays(attackedSquares, pins, current->pos);
+        computeDiagonalRays(attackedSquares, checkers, pins, current->pos);
+        computeSlidingRays(attackedSquares, checkers, pins, current->pos);
         current = current->next;
     }
 
-    int kingPos = (board.turn == WHITE) ? board.whiteKing : board.blackKing;
+    int kingPos = (board.turn == WHITE) ? board.blackKing : board.whiteKing;
     int kingRank = kingPos/8;
     int kingFile = kingPos%8;
 
-    if(inBounds(kingRank+1, kingFile+1)) addPositionNoDuplicates(attackedSquares, index(kingRank + 1, kingFile + 1));
-    if(inBounds(kingRank+1, kingFile+0)) addPositionNoDuplicates(attackedSquares, index(kingRank + 1, kingFile + 0));
-    if(inBounds(kingRank+1, kingFile-1)) addPositionNoDuplicates(attackedSquares, index(kingRank + 1, kingFile - 1));
-    if(inBounds(kingRank+0, kingFile+1)) addPositionNoDuplicates(attackedSquares, index(kingRank + 0, kingFile + 1));
-    if(inBounds(kingRank+0, kingFile-1)) addPositionNoDuplicates(attackedSquares, index(kingRank + 0, kingFile - 1));
-    if(inBounds(kingRank-1, kingFile+1)) addPositionNoDuplicates(attackedSquares, index(kingRank - 1, kingFile + 1));
-    if(inBounds(kingRank-1, kingFile+0)) addPositionNoDuplicates(attackedSquares, index(kingRank - 1, kingFile + 0));
-    if(inBounds(kingRank-1, kingFile-1)) addPositionNoDuplicates(attackedSquares, index(kingRank - 1, kingFile - 1));
+    if(inBounds(kingRank+1, kingFile+1)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank + 1, kingFile + 1), kingPos);
+    if(inBounds(kingRank+1, kingFile+0)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank + 1, kingFile + 0), kingPos);
+    if(inBounds(kingRank+1, kingFile-1)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank + 1, kingFile - 1), kingPos);
+    if(inBounds(kingRank+0, kingFile+1)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank + 0, kingFile + 1), kingPos);
+    if(inBounds(kingRank+0, kingFile-1)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank + 0, kingFile - 1), kingPos);
+    if(inBounds(kingRank-1, kingFile+1)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank - 1, kingFile + 1), kingPos);
+    if(inBounds(kingRank-1, kingFile+0)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank - 1, kingFile + 0), kingPos);
+    if(inBounds(kingRank-1, kingFile-1)) addPositionNoDuplicates(attackedSquares, checkers, index(kingRank - 1, kingFile - 1), kingPos);
 }
 
 void addPawnMove(Moves *moves, int origin, int dest, int colorToMove) {
@@ -1069,7 +1156,7 @@ Moves getPseudoLegalMoves(int colorToMove) {
     };
 
 
-
+    
     //castling
     if(colorToMove == WHITE) {
         if(board.whiteKCastleRight && get(0, 5) == EMPTY && get(0, 6) == EMPTY) {
@@ -1147,11 +1234,11 @@ Moves getPseudoLegalMoves(int colorToMove) {
         addSlidingMoves(&moves, current->pos, TRUE);
         current = current->next;
     }
-
+    
     int kingPos = (colorToMove == WHITE) ? board.whiteKing : board.blackKing;
     int kingRank = kingPos/8;
     int kingFile = kingPos%8;
-
+    
     addMove2(&moves, kingPos, kingRank + 1, kingFile + 1, colorToMove);
     addMove2(&moves, kingPos, kingRank + 1, kingFile + 0, colorToMove);
     addMove2(&moves, kingPos, kingRank + 1, kingFile - 1, colorToMove);
@@ -1184,6 +1271,72 @@ int inCheck(int player, Moves opponentMoves) {
     return FALSE;
 }
 
+PinNode *getPin(Pins pins, int pos) {
+    PinNode *current = pins.head;
+    while(current != NULL) {
+        if(current->pieceIndex == pos) return current;
+        current = current->next;
+    }
+    return NULL;
+}
+
+int fullyLegalMove(MoveNode move) {
+   PinNode *pin;
+   if(!containsPosition(board.attackedSquares, (board.turn == WHITE) ? board.whiteKing : board.blackKing)) {
+        if(move.castle != NO_CASTLE) {
+            int safe[2];
+            if(move.castle == WHITE_KING_SIDE_CASTLE) {
+                safe[0] = 5;
+                safe[1] = 6;
+            } else if(move.castle == WHITE_QUEEN_SIDE_CASTLE) {
+                safe[0] = 3;
+                safe[1] = 2;
+            } else if(move.castle == BLACK_KING_SIDE_CASTLE) {
+                safe[0] = 62;
+                safe[1] = 61;
+            } else if(move.castle == BLACK_QUEEN_SIDE_CASTLE) {
+                safe[0] = 59;
+                safe[1] = 58;
+            }
+            PosNode *current = board.attackedSquares.head;
+            while(current != NULL) {
+                if(current->pos == safe[0] || current->pos == safe[1]) return FALSE;
+                current = current->next;
+            }
+            return TRUE;
+        } else if(piece(board.board[move.origin]) == KING) {
+            return !containsPosition(board.attackedSquares, move.dest);
+        } else if((pin = getPin(board.pins, move.origin)) != NULL) {
+            //char sq[3];
+            //getSquareChar(move.origin, sq);
+            //printf("%s: ", sq); printPositions(*(pin->pinLine));
+            if(pin->enPassantOnly) {
+                return move.enPassantTarget == -1;
+            }
+            return containsPosition(*(pin->pinLine), move.dest);
+        }
+   } else {
+        if(piece(board.board[move.origin]) == KING && !containsPosition(board.attackedSquares, move.dest)) {
+            return TRUE;
+        } else if(piece(board.board[move.origin]) != KING && board.checkers.len == 1) {
+            if((pin = getPin(board.pins, move.origin)) != NULL && !containsPosition(*(pin->pinLine), move.dest)) {
+                if(pin->enPassantOnly) {
+                    return move.enPassantTarget == -1;
+                }
+                return FALSE;
+            }
+            if(board.checkers.head->pinLine != NULL) {
+                if(containsPosition(*(board.checkers.head->pinLine), move.dest)) return TRUE;
+            } else if(board.checkers.head->pieceIndex == move.dest || board.checkers.head->pieceIndex == move.enPassantTarget) {
+                return TRUE;
+            }
+        }
+        return FALSE;
+   }
+   return TRUE;
+}
+
+/*
 int fullyLegalMove(MoveNode move) {
 
     
@@ -1241,9 +1394,9 @@ int fullyLegalMove(MoveNode move) {
 
     return legal;
 }
+*/
 
 Moves getLegalMoves() {
-
     Moves pseudoLegalMoves = getPseudoLegalMoves(board.turn);
     Moves fullyLegalMoves = {
         .len = 0,
@@ -1251,13 +1404,16 @@ Moves getLegalMoves() {
         .tail = NULL
     };
 
-
+    clearPositions(&board.attackedSquares);
+    clearPins(&board.pins);
+    clearPins(&board.checkers);
+    
+    getAttackedSquaresPinsAndCheckers(&board.attackedSquares, &board.pins, &board.checkers);
     MoveNode *current = pseudoLegalMoves.head;
-
     while(current != NULL) {
         if(fullyLegalMove(*current)) {
             MoveNode *copy;
-            copy = (MoveNode *)calloc(1, sizeof(MoveNode));
+            copy = (MoveNode *)fred(1, sizeof(MoveNode));
 
             copy->castle = current->castle;
             copy->dest = current->dest;
@@ -1269,7 +1425,9 @@ Moves getLegalMoves() {
         }
         current = current->next;
     }
-
+    
+    
+    clearMoves(&pseudoLegalMoves);
     return fullyLegalMoves;
 }
 
@@ -1313,13 +1471,16 @@ void makeRandomMove() {
         }
         makeMove(*curr);
     }
+    clearMoves(&moves);
 }
 
 int countMoves(int depth) {
     Moves moves = getLegalMoves();
     int numMoves = 0;
     if(depth == 1) {
-        return moves.len;
+        int len = moves.len;
+        clearMoves(&moves);
+        return len;
     } else {
         MoveNode *current = moves.head;
         while(current != NULL) {
@@ -1329,10 +1490,12 @@ int countMoves(int depth) {
             int lastBlackQCastleRight = board.blackQCastleRight;
             int lastEnPassantTarget = board.enPassantTarget;
             
+            int timeWasted = 0;
+            int time = micros();
             int capture = makeMove(*current);
             numMoves += countMoves(depth-1);
             unMakeMove(*current, capture, lastEnPassantTarget);
-
+            timeWasted += micros() - time;
             board.whiteKCastleRight = lastWhiteKCastleRight;
             board.whiteQCastleRight = lastWhiteQCaslteRight;
             board.blackKCastleRight = lastBlackKCastleRight;
@@ -1342,6 +1505,7 @@ int countMoves(int depth) {
         }
     }
 
+    clearMoves(&moves);
     return numMoves;
 }
 
@@ -1411,8 +1575,8 @@ int execute(char *command) {
 
     int argc;
     char **args;
-
     args = init();
+
     parse(command, args, &argc);
 
     if(strcmp(args[0], "load") == 0) {
@@ -1435,6 +1599,7 @@ int execute(char *command) {
         } else {
             printf("Illegal Move\n");
         }
+        clearMoves(&moves);
         
     } else if(strcmp(args[0], "quit") == 0) {
         return TRUE;
@@ -1452,10 +1617,11 @@ int execute(char *command) {
         printBoard();
     } else if(strcmp(args[0], "moves") == 0) {
         unsigned long start = micros();
-        Moves moves = getPseudoLegalMoves(board.turn);
+        Moves moves = getLegalMoves(board.turn);
         printf("Time: %ld\n", micros() - start);
         
         printMoves(moves);
+        clearMoves(&moves);
     } else if(strcmp(args[0], "positions") == 0) {
 
         printf("White \n");
@@ -1544,6 +1710,7 @@ int execute(char *command) {
             board.blackQCastleRight = blackQCastleRight;
             current = current->next;
         }
+        clearMoves(&moves);
         printf("Nodes: %d\n", totalNodes);
         moveCount = 0;
     } else if(strcmp(args[0], "break") == 0) {
@@ -1568,14 +1735,12 @@ int execute(char *command) {
     } else if(strcmp(args[0], "movetest") == 0) {
         unsigned long micros_t = micros();
         Moves moves = getLegalMoves(board.turn);
-        printf("Move generation time: %ld\n", micros() - micros_t);
         if(moves.len != 0) {
             int index = (int)((rand() / (double)RAND_MAX) * moves.len); 
             MoveNode *move = moves.head;
             for(int i = 0; i < index; i ++) {
                 move = move->next;
             }
-            micros_t = micros();
             int enPassantTarget = board.enPassantTarget;
             int whiteKCastleRight = board.whiteKCastleRight;
             int whiteQCastleRight = board.whiteQCastleRight;
@@ -1587,7 +1752,6 @@ int execute(char *command) {
             board.whiteQCastleRight = whiteQCastleRight;
             board.blackKCastleRight = blackKCastleRight;
             board.blackQCastleRight = blackQCastleRight;
-            printf("Make/unmake move time: %ld\n", micros() - micros_t);
         }
     } else if(strcmp(args[0], "test") == 0) {
         Pins pins = {
@@ -1600,20 +1764,37 @@ int execute(char *command) {
             .tail = NULL,
             .len = 0
         };
+        Pins checkers = {
+            .head = NULL,
+            .tail = NULL,
+            .len = 0
+        };
         unsigned long start = micros();
-        getAttackedSquaresAndPins(&attackedSquares, &pins);
+        getAttackedSquaresPinsAndCheckers(&attackedSquares, &pins, &checkers);
         printf("Time: %ld\n", micros() - start);
         printf("Attacked squares: "); printPositions(attackedSquares);
-        printf("Pins\n");
-        PinNode *current = pins.head;
+        printf("Checkers\n");
+        PinNode *current = checkers.head;
         while(current != NULL) {
             char position[3];
             getSquareChar(current->pieceIndex, position);
-            printf("%s: ", position); printPositions(*(current->pinLine));
+            printf("%s: ", position); if(current->pinLine != NULL) printPositions(*(current->pinLine));
             current = current->next;
         }
+        printf("\nPins\n");
+        current = pins.head;
+        while(current != NULL) {
+            char position[3];
+            getSquareChar(current->pieceIndex, position);
+            printf("%s, e.p only (%d): ", position, current->enPassantOnly); printPositions(*(current->pinLine));
+            current = current->next;
+        }
+    } else if(strcmp(args[0], "mem") == 0) {
+        printf("Mem: %d", memCount);
     }
 
+    keel(*args);
+    keel(args);
     return FALSE;
 }
 
