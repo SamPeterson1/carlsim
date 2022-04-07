@@ -1,0 +1,4 @@
+#!/bin/sh
+
+
+gcc -O3 -g3 -o carlsim Main.c Board.c Commands.c StrUtil.c MoveGenerator.c MagicHashTable.c Moves.c -lm
