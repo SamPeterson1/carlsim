@@ -28,6 +28,8 @@
 #define NORTHWEST 7
 #define NONE 8
 
+#define GET_VALUE(t, k) (( t )->items[((*( k )) * ( t )->magic) >> (uint64_t)(64-( t )->bits)])->value
+
 void initMoveGenerator();
 int generateLegalMoves(uint16_t *moves);
 void printBitboard(uint64_t *bitboard);

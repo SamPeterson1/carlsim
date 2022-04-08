@@ -14,10 +14,6 @@ void printBoard() {
     }
     printf("    +---+---+---+---+---+---+---+---+\n");
     printf("     (a) (b) (c) (d) (e) (f) (g) (h)\n\n");
-
-    printBitboard(&board.bitboard);
-    printBitboard(&board.colorBitboards[0]);
-    printBitboard(&board.colorBitboards[1]);
 }
 
 void printInfo() {

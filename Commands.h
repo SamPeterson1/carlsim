@@ -2,6 +2,7 @@
 #include "Moves.h"
 #include "Board.h"
 #include "MoveGenerator.h"
+#include "Search.h"
 #include <stdio.h>
 
 int execute(char *input);

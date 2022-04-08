@@ -130,14 +130,6 @@ unsigned char makeMove(uint16_t move) {
             setIndex(dest, QUEEN | turn);
         }
     } else {
-        int revokedRights = 0;
-        if(origin == 0 || dest == 0) revokedRights |= WHITE_CASTLE_QUEENSIDE_RIGHT;
-        if(origin == 7 || dest == 7) revokedRights |= WHITE_CASTLE_KINGSIDE_RIGHT;
-        if(origin == 56 || dest == 56) revokedRights |= BLACK_CASTLE_QUEENSIDE_RIGHT;
-        if(origin == 63 || dest == 63) revokedRights |= BLACK_CASTLE_KINGSIDE_RIGHT;
-
-        board_removeCastleRight(revokedRights);
-        
         if(board.pieceCodes[origin] == (WHITE | KING))
             board_removeCastleRight(WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
         else if(board.pieceCodes[origin] == (BLACK | KING))
@@ -151,6 +143,13 @@ unsigned char makeMove(uint16_t move) {
         clearIndex(origin);
     }
 
+    int revokedRights = 0;
+    if(origin == 0 || dest == 0) revokedRights |= WHITE_CASTLE_QUEENSIDE_RIGHT;
+    if(origin == 7 || dest == 7) revokedRights |= WHITE_CASTLE_KINGSIDE_RIGHT;
+    if(origin == 56 || dest == 56) revokedRights |= BLACK_CASTLE_QUEENSIDE_RIGHT;
+    if(origin == 63 || dest == 63) revokedRights |= BLACK_CASTLE_KINGSIDE_RIGHT;
+
+    board_removeCastleRight(revokedRights);
     
     board_setEPFile(newEpFile);
     board.gameState ^= 256;

@@ -23,6 +23,6 @@ typedef struct MagicHashTable_s {
 MHTItem *createItem(uint16_t *key, uint64_t *value);
 MagicHashTable *createTable(int size, int bits, uint64_t magic);
 void insertValue(MagicHashTable *table, uint64_t *key, uint64_t *value);
-uint64_t *getValue(MagicHashTable *table, uint64_t *key);
+//uint64_t *getValue(MagicHashTable *table, uint64_t *key);
 
 #endif

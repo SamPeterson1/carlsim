@@ -28,7 +28,9 @@ void insertValue(MagicHashTable *table, uint64_t *key, uint64_t *value) {
     table->items[hash] = item;
 }
 
+/*
 uint64_t *getValue(MagicHashTable *table, uint64_t *key) {
     uint16_t hash = ((*key) * table->magic) >> (uint64_t)(64-table->bits);
     return (table->items[hash])->value;
 }
+*/

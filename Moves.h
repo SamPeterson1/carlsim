@@ -19,6 +19,23 @@
 #define MOVE_ROOK_PROMOTION 0xA000
 #define MOVE_QUEEN_PROMOTION 0xB000
 
+/*
+origin
+dest
+capture
+en passant
+castle
+promotion
+check
+*/
+
+/*
+0-5: origin
+6-11: dest
+12-15: capture
+16-
+*/
+
 #define move_origin(move) (move & 0x3F)
 #define move_dest(move) ((move & 0xFC0) >> 6)
 #define move_isCapture(move) ((move >> 14) & 1)

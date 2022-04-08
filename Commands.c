@@ -25,6 +25,11 @@ int execute(char *input) {
         cmdUndo();
     } else if(strcmp(args[0], "perft") == 0) {
         cmdPerft(args);
+    } else if(strcmp(args[0], "ai") == 0) {
+        makeMove(findBestMove());
+        printBoard();
+    }  else if(strcmp(args[0], "eval") == 0) {
+        printf("Eval: %f\n", evaluate());
     }
 
     return FALSE;
