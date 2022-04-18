@@ -2,23 +2,15 @@
 #ifndef MHT_H
 #define MHT_H
 
+#include "Defines.h"
+#include "Types.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 #include "MoveGenerator.h"
-
-typedef struct MHTItem_s {
-    uint16_t *key;
-    uint64_t *value;
-} MHTItem;
-
-typedef struct MagicHashTable_s {
-    int bits;
-    uint64_t magic;
-    MHTItem **items;
-} MagicHashTable;
 
 MHTItem *createItem(uint16_t *key, uint64_t *value);
 MagicHashTable *createTable(int size, int bits, uint64_t magic);

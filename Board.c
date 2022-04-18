@@ -1,14 +1,14 @@
 #include "Board.h"
 
-Board board;
+Board g_board;
 
-void printBoard() {    
+void printBoard(Board *board) {    
     printf("\e[1;1H\e[2J");
     for(int rank = 7; rank >= 0; rank --) {
         printf("    +---+---+---+---+---+---+---+---+\n");
         printf("(%d) ", rank+1);
         for(int file = 0; file < 8; file ++) {
-            printf("| %c ", getPieceChar(board_get(rank * 8 + file)));
+            printf("| %c ", getPieceChar(board->pieceCodes[rank * 8 + file]));
         }
         printf("|\n");
     }
@@ -16,14 +16,20 @@ void printBoard() {
     printf("     (a) (b) (c) (d) (e) (f) (g) (h)\n\n");
 }
 
-void printInfo() {
-    printf((board_getTurn() == WHITE) ? "\nWhite to move\n" : "\nBlack to move\n");
-    printf("BlackKCastleRight: %d \n", board_hasCastleRight(BLACK_CASTLE_KINGSIDE_RIGHT));
-    printf("BlackQCastleRight: %d \n", board_hasCastleRight(BLACK_CASTLE_QUEENSIDE_RIGHT));
-    printf("WhiteKCastleRight: %d \n", board_hasCastleRight(WHITE_CASTLE_KINGSIDE_RIGHT));
-    printf("WhiteQCastleRight: %d \n", board_hasCastleRight(WHITE_CASTLE_QUEENSIDE_RIGHT));
-    printf("En Passant File: %d \n", board_getEPFile());
-    printf("Half Move Clock: %d \n", board_getHalfMoveCounter());
+unsigned long micros() {
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    return 1000000 * tv.tv_sec + tv.tv_usec;
+}
+
+void printInfo(Board *board) {
+    printf((G_TURN == WHITE) ? "\nWhite to move\n" : "\nBlack to move\n");
+    printf("BlackKCastleRight: %d \n", G_HAS_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT));
+    printf("BlackQCastleRight: %d \n", G_HAS_CASTLE_RIGHT(BLACK_CASTLE_QUEENSIDE_RIGHT));
+    printf("WhiteKCastleRight: %d \n", G_HAS_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT));
+    printf("WhiteQCastleRight: %d \n", G_HAS_CASTLE_RIGHT(WHITE_CASTLE_QUEENSIDE_RIGHT));
+    printf("En Passant File: %d \n", G_EP_FILE);
+    printf("Half Move Clock: %d \n", G_HALFMOVE_COUNTER);
 }
 
 unsigned char getPieceByte(char pieceChar) {
@@ -57,7 +63,7 @@ unsigned char getPieceByte(char pieceChar) {
 char getPieceChar(unsigned char pieceByte) {
     if(pieceByte == EMPTY) return ' ';
     char c = ' ';
-    switch(board_getPieceType(pieceByte)) {
+    switch(PIECE_TYPE(pieceByte)) {
         case PAWN:
             c = 'p';
             break;
@@ -77,45 +83,50 @@ char getPieceChar(unsigned char pieceByte) {
             c = 'k';
             break;
     }
-    if(board_getPieceColor(pieceByte) == WHITE) c -= 32;
+    if(PIECE_COLOR(pieceByte) == WHITE) c -= 32;
     return c;
 }
 
-void clearIndex(int index) {
-    unsigned char piece = board.pieceCodes[index];
-    board.bitboard &= ~(1ULL << index);
-    board.pieces[board_getPieceType(piece) >> 1][board_getPieceColor(piece)] &= ~(1ULL << index);
-    board.colorBitboards[board_getPieceColor(piece)] &= ~(1ULL << index);
-    board.pieceCodes[index] = EMPTY;
+void clearIndex(Board *board, int index) {
+    unsigned char piece = board->pieceCodes[index];
+    board->bitboard &= ~(1ULL << index);
+    board->pieces[PIECE_TYPE(piece) >> 1][PIECE_COLOR(piece)] &= ~(1ULL << index);
+    board->colorBitboards[PIECE_COLOR(piece)] &= ~(1ULL << index);
+
+    if(board->pieceCodes[index] != EMPTY) {
+        board->zobrist ^= g_zPieceSquareKeys[piece][index];
+    }
+    board->pieceCodes[index] = EMPTY;
 }
 
-void setIndex(int index, unsigned char piece) {
-    clearIndex(index);
+void setIndex(Board *board, int index, unsigned char piece) {
+    clearIndex(board, index);
     if(piece != EMPTY) {
-        board.bitboard |= (1ULL << index);
-        board.pieces[board_getPieceType(piece) >> 1][board_getPieceColor(piece)] |= (1ULL << index);
-        board.colorBitboards[board_getPieceColor(piece)] |= (1ULL << index);
-        board.pieceCodes[index] = piece;
+        board->bitboard |= (1ULL << index);
+        board->pieces[PIECE_TYPE(piece) >> 1][PIECE_COLOR(piece)] |= (1ULL << index);
+        board->colorBitboards[PIECE_COLOR(piece)] |= (1ULL << index);
+        board->pieceCodes[index] = piece;
+        board->zobrist ^= g_zPieceSquareKeys[piece][index];
     }
 }
 
-void loadFENStr(char *FENCode) {
+void loadFENStr(Board *board, char *FENCode) {
     int rank = 7;
     int file = 0;
     for(int i = 0; i < 64; i ++) {
-        board.pieceCodes[i] = EMPTY;
+        board->pieceCodes[i] = EMPTY;
     }
     for(int i = 0; i < 6; i ++) {
-        board.pieces[i][0] = 0;
-        board.pieces[i][1] = 0;
+        board->pieces[i][0] = 0;
+        board->pieces[i][1] = 0;
     }
     
     int i = 0;
     
-    board.gameState = 0;
-    board.bitboard = 0;
-    board.colorBitboards[0] = 0;
-    board.colorBitboards[1] = 0;
+    board->gameState = 0;
+    board->bitboard = 0;
+    board->colorBitboards[0] = 0;
+    board->colorBitboards[1] = 0;
 
     while(FENCode[i] != ' ') {
         if(FENCode[i] == '/') {
@@ -123,7 +134,7 @@ void loadFENStr(char *FENCode) {
             file = 0;
         } else if(FENCode[i] > 64) {
             unsigned char pieceByte = getPieceByte(FENCode[i]);
-            setIndex(rank * 8 + file, pieceByte);
+            setIndex(board, rank * 8 + file, pieceByte);
             file ++;
         } else {
             file += FENCode[i] - 48;
@@ -135,20 +146,20 @@ void loadFENStr(char *FENCode) {
 
     while(FENCode[i] != ' ') {
         if(FENCode[i] == 'Q') {
-            board.gameState |= WHITE_CASTLE_QUEENSIDE_RIGHT;
+            board->gameState |= WHITE_CASTLE_QUEENSIDE_RIGHT;
         } else if(FENCode[i] == 'q') {
-            board.gameState |= BLACK_CASTLE_QUEENSIDE_RIGHT;
+            board->gameState |= BLACK_CASTLE_QUEENSIDE_RIGHT;
         } else if(FENCode[i] == 'K') {
-            board.gameState |= WHITE_CASTLE_KINGSIDE_RIGHT;
+            board->gameState |= WHITE_CASTLE_KINGSIDE_RIGHT;
         } else if(FENCode[i] == 'k') {
-            board.gameState |= BLACK_CASTLE_KINGSIDE_RIGHT;
+            board->gameState |= BLACK_CASTLE_KINGSIDE_RIGHT;
         }
         i++;
     }
     i++;
 
     if(FENCode[i] != '-') {
-        board_setEPFile(FENCode[i] - 97);
+        G_SET_EP_FILE(FENCode[i] - 97);
         i++;
     }
     i+= 2;
@@ -159,8 +170,17 @@ void loadFENStr(char *FENCode) {
     }
     char halfMovesChar[len];
     memcpy(halfMovesChar, &FENCode[i-len], len);
-    board_getHalfMoveCounter();
-    board.gameState |= atoi(halfMovesChar) << 8;
+    board->gameState |= atoi(halfMovesChar) << 8;
+
+    z_getKey(board, &board->zobrist);
+}
+
+int getFile(char file) {
+    return file - 97;
+}
+
+int getRank(char rank) {
+    return rank - 49;
 }
 
 void getSquareStr(int square, char *str) {

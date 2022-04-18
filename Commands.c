@@ -1,8 +1,10 @@
 #include "Commands.h"
 
 uint16_t lastMove;
+uint16_t lastGameState;
+unsigned char lastCapture;
 
-int execute(char *input) {
+int cmd_execute(char *input) {
     char **args = initBuffer();
     int argc;
     parse(input, args, &argc);
@@ -12,33 +14,63 @@ int execute(char *input) {
     }
 
     if(strcmp(args[0], "move") == 0) {
-        cmdMove(args, argc);
+        cmd_move(args, argc);
     } else if(strcmp(args[0], "board") == 0) {
-        cmdPrintBoard(args, argc);
+        cmd_printBoard(args, argc);
     } else if(strcmp(args[0], "load") == 0) {
-        cmdLoad(args, argc);
+        cmd_load(args, argc);
     } else if(strcmp(args[0], "moves") == 0) {
-        cmdPrintMoves();
-    } else if(strcmp(args[0], "test") == 0) {
-        cmdTest();
+        cmd_printMoves();
     } else if(strcmp(args[0], "undo") == 0) {
-        cmdUndo();
+        cmd_undo();
     } else if(strcmp(args[0], "perft") == 0) {
-        cmdPerft(args);
+        cmd_perft(args);
     } else if(strcmp(args[0], "ai") == 0) {
-        makeMove(findBestMove());
-        printBoard();
+        uint16_t move;
+        if(argc == 2) move = findBestMove(atoi(args[1]));
+        else move = findBestMove(6);
+        lastGameState = g_board.gameState;
+        lastCapture = makeMove(&g_board, move);
+        printBoard(&g_board);
     }  else if(strcmp(args[0], "eval") == 0) {
-        printf("Eval: %f\n", evaluate());
+        printf("Eval: %d\n", evaluate());
+    } else if(strcmp(args[0], "mate") == 0) {
+        updateMateStatus();
+        printf("Mate status %d\n", g_board.mateStatus);
+    } else if(strcmp(args[0], "pseudo") == 0) {
+        uint16_t *moves = (uint16_t *) calloc(256, sizeof(uint16_t));
+        int num = generatePseudoLegalMoves(moves, GEN_ALL);
+        printf("%d\n", num);
+    } else if(strcmp(args[0], "key") == 0) {
+        ZobristKey key = 0;
+        z_getKey(&g_board, &key);
+        if(key != g_board.zobrist) {
+            printf("Error. Keys don't match.\n");
+        }
+        printf("Key: %ld\n", g_board.zobrist);
+    } else if(strcmp(args[0], "san") == 0) {
+        for(int i = 1; i < argc; i ++) {
+            uint16_t move = parseAlgebraicMove(&g_board, args[i]);
+            makeMove(&g_board, move);
+        }
+        printBoard(&g_board);
+    } else if(strcmp(args[0], "book") == 0) {
+        uint16_t move = bk_getMove(&g_board.zobrist);
+        if(move == 0) {
+            printf("Couldn't find position in book\n");
+        } else {
+            makeMove(&g_board, move);
+            printBoard(&g_board);
+        }
     }
 
     return FALSE;
 }
 
-void cmdMove(char **args, int argc) {
+void cmd_move(char **args, int argc) {
     for(int i = 1; i < argc; i ++) {
         uint16_t *moves = (uint16_t *) calloc(256, sizeof(uint16_t));
-        generateLegalMoves(moves);
+        generateLegalMoves(&g_board, moves, GEN_ALL);
         uint16_t move = parseMove(args[i]);
         int legal = FALSE;
         do {
@@ -49,51 +81,40 @@ void cmdMove(char **args, int argc) {
         } while (*++moves != 0);
         
         if(legal) {
-            makeMove(parseMove(args[i]));
-            printBoard();
+            printf("Move eval: %d\n", evalMove(move));
+            makeMove(&g_board, parseMove(args[i]));
+            printBoard(&g_board);
         } else {
             printf("Illegal move\n");
         }
     }
 }
 
-void cmdPerft(char **args) {
+void cmd_perft(char **args) {
     int depth = atoi(args[1]);
     perft(depth);
 }
 
-void cmdUndo() {
-    //unMakeMove(lastMove);
+void cmd_undo() {
+    unMakeMove(&g_board, lastMove, lastCapture, lastGameState);
 }
 
-unsigned long micros2() {
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return 1000000 * tv.tv_sec + tv.tv_usec;
-}
-
-void cmdPrintBoard(char **args, int argc) {
-    unsigned long ltime = micros2();
-    printBoard();
-    printf("%d\n", micros2()-ltime);
+void cmd_printBoard(char **args, int argc) {
+    printBoard(&g_board);
     for(int i = 1; i < argc; i ++) {
         if(strcmp(args[i], "info") == 0) {
-            printInfo();
+            printInfo(&g_board);
         }
     }
 }
 
-void cmdLoad(char **args, int argc) {
-    if(argc == 2) loadFENStr(args[1]);
+void cmd_load(char **args, int argc) {
+    if(argc == 2) loadFENStr(&g_board, args[1]);
 }
 
-void cmdPrintMoves() {
+void cmd_printMoves() {
     uint16_t *moves = (uint16_t *) calloc(256, sizeof(uint16_t));
 
-    generateLegalMoves(moves);
+    generateLegalMoves(&g_board, moves, GEN_ALL);
     printMoves(moves);
-}
-
-void cmdTest() {
-    test();
 }

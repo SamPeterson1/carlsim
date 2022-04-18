@@ -95,6 +95,8 @@ uint64_t checkers;
 uint64_t checkMask;
 uint64_t pinRays[64];
 
+uint16_t movesBuffer[256];
+
 //add 7 to distance
 int positionToDirectionMap[64][64];
 
@@ -114,31 +116,6 @@ static inline int popLSB(uint64_t *a) {
     return index;
 }
 
-unsigned long micros() {
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return 1000000 * tv.tv_sec + tv.tv_usec;
-}
-
-/*
-static inline void generateKnightAttacks(uint64_t *moves, int turnIndex) {
-    uint64_t knights = knights(turnIndex);
-    while(knights) {
-        *moves |= knightAttacks[popLSB(&knights)];
-    }
-}
-*/
-
-/*
-static inline void generatePawnAttacks(uint64_t *moves, int turnIndex) {
-    uint64_t pawns = pawns(turnIndex);
-    while(pawns) {
-        int pos = popLSB(&pawns);
-        *moves |= pawnAttacks[pos][turnIndex];
-    }
-}
-*/
-
 void printBitboard(uint64_t *bitboard) {
     for(int rank = 7; rank >= 0; rank --) {
         for(int file = 0; file < 8; file ++) {
@@ -152,11 +129,11 @@ void printBitboard(uint64_t *bitboard) {
 }
 
 int inBounds(int rank, int file) {
-    return (rank >= 0 & rank < 8 && file >= 0 && file < 8);
+    return (rank >= 0 && rank < 8 && file >= 0 && file < 8);
 }
 
 int notOnEdge(int rank, int file) {
-    return (rank > 0 & rank < 7 && file > 0 && file < 7);
+    return (rank > 0 && rank < 7 && file > 0 && file < 7);
 }
 
 void addMove(uint64_t *bitboard, int rank, int file) {
@@ -307,7 +284,6 @@ void initMoveGenerator() {
                         else if(dRank > 0 && dFile < 0) dir = SOUTHEAST;
                     }
 
-                    uint64_t a = (1ULL << index) | (1ULL << destIndex);                    
                     positionToDirectionMap[index][destIndex] = dir;
                 }
             }
@@ -352,39 +328,9 @@ void initMoveGenerator() {
     }
 }
 
-/*
-static inline void generateDiagonalAttacks(uint64_t *moves, int index) {
-    
-}
-*/
-
-/*
-static inline void generateSlidingAttacks(uint64_t *moves, int index) {
-    uint64_t kingBitboard = kings(board_getTurn());
-    int kingPos = getLSB(&kingBitboard);
-
-    uint64_t blockers = rookMoves[index] & (board.bitboard & ~kingBitboard);
-    uint64_t move = *GET_VALUE(rookMagicTables[index], &blockers);
-    *moves |= move;
-    
-    int dir = positionToDirectionMap[index][kingPos];
-    if(dir != NONE) {
-        uint64_t kingBlocker = kingBitboard & directionalMoves[index][dir];
-        uint64_t movesToKing = (directionalMoves[index][dir] & *GET_VALUE(rookMagicTables[index], &kingBlocker)) & ~kingBitboard;
-        uint64_t kingGuards = board.bitboard & movesToKing;
-        if(move & kingBitboard) {
-            checkMask = movesToKing | (1ULL << index);
-        } else if(popCount(kingGuards) == 1) {
-            int pinIndex = getLSB(&kingGuards);
-            pinRays[pinIndex] = movesToKing | (1ULL << index);
-        }
-    }
-}
-*/
-
 static inline unsigned long perftRecursive(int depth) {
     uint16_t *moves = malloc(sizeof(uint16_t)*255);
-    int numMoves = generateLegalMoves(moves);
+    int numMoves = generateLegalMoves(&g_board, moves, GEN_ALL);
     movesGenerated += numMoves;
     unsigned long sum = 0;
     if(depth == 1) {
@@ -392,10 +338,10 @@ static inline unsigned long perftRecursive(int depth) {
         return numMoves;
     } else {
         for(int i = 0; i < numMoves; i ++) {
-            uint16_t lastGameState = board.gameState;
-            unsigned char lastCapture = makeMove(moves[i]);
+            uint16_t lastGameState = g_board.gameState;
+            unsigned char lastCapture = makeMove(&g_board, moves[i]);
             sum += perftRecursive(depth-1);
-            unMakeMove(moves[i], lastCapture, lastGameState);
+            unMakeMove(&g_board, moves[i], lastCapture, lastGameState);
         }
     }
     free(moves);
@@ -406,7 +352,7 @@ void perft(int depth) {
     totalTime = 0;
     movesGenerated = 0;
     uint16_t *moves = malloc(sizeof(uint16_t)*255);
-    int numMoves = generateLegalMoves(moves);
+    int numMoves = generateLegalMoves(&g_board, moves, GEN_ALL);
     movesGenerated += numMoves;
     unsigned long total = 0;
     for(int i = 0; i < numMoves; i ++) {
@@ -416,12 +362,12 @@ void perft(int depth) {
             printf("%s: 1\n", moveStr);
             total ++;
         } else {
-            uint16_t lastGameState = board.gameState;
-            unsigned char lastCapture = makeMove(moves[i]);
+            uint16_t lastGameState = g_board.gameState;
+            unsigned char lastCapture = makeMove(&g_board, moves[i]);
             int val = perftRecursive(depth-1);
             total += val;
             printf("%s: %d %d\n", moveStr, val, move_getSpecial(moves[i]));
-            unMakeMove(moves[i], lastCapture, lastGameState);
+            unMakeMove(&g_board, moves[i], lastCapture, lastGameState);
         } 
     }
     free(moves);
@@ -429,13 +375,161 @@ void perft(int depth) {
     printf("Average move generation time: %f moves/sec\n", (double)movesGenerated/totalTime*1.0E6);
 }
 
-int generateLegalMoves(uint16_t *moves) {
+void updateMateStatus() {
+    int numMoves = generateLegalMoves(&g_board, movesBuffer, GEN_ALL);
+    g_board.mateStatus = NO_MATE;
+    if(numMoves == 0) {
+        if(numCheckers == 0) g_board.mateStatus = STALE_MATE;
+        else g_board.mateStatus = CHECK_MATE;
+    }
+}
+
+int inCheck(int turn) {
+    int kingPos = getLSB(&G_KINGS(turn));
+    int oppTurn = 1-turn;
+
+    uint64_t checkers = 0;
+
+    uint64_t blockers = rookMoves[kingPos] & g_board.bitboard;
+    checkers |= *GET_VALUE(rookMagicTables[kingPos], &blockers) & (G_ROOKS(oppTurn) | G_QUEENS(oppTurn));
+
+    blockers = bishopMoves[kingPos] & g_board.bitboard;
+    checkers |= *GET_VALUE(bishopMagicTables[kingPos], &blockers) & (G_BISHOPS(oppTurn) | G_QUEENS(oppTurn));
+
+    checkers |= knightAttacks[kingPos] & G_KNIGHTS(oppTurn);
+    checkers |= pawnAttacks[kingPos][turn] & G_PAWNS(oppTurn);
+
+    return (checkers != 0);
+}
+
+int generatePseudoLegalMoves(uint16_t *moves, int genType) {
     unsigned long foo = micros();
-    int turn = board_getTurn();
+    int turn = G_TURN;
     int oppTurn = 1 - turn;
-    uint64_t kingBitboard = kings(board_getTurn());
+    uint64_t kingBitboard = G_KINGS(G_TURN);
     int kingPos = getLSB(&kingBitboard);
+    g_board.mateStatus = NO_MATE;
     
+    uint64_t captureMask = 0xFFFFFFFFFFFFFFFF;
+    if(genType == GEN_CAPTURES) captureMask = g_board.colorBitboards[oppTurn];
+    else if(genType == GEN_QUIETS) captureMask = ~g_board.colorBitboards[oppTurn];
+
+    int numMoves = 0;
+    uint64_t kingMovesBitboard = captureMask & kingMoves[kingPos] & ~g_board.colorBitboards[turn];
+    while(kingMovesBitboard) {
+        moves[numMoves++] = create_move(kingPos, popLSB(&kingMovesBitboard), MOVE_QUIET);
+    }
+
+    uint64_t pawns = G_PAWNS(turn);
+    int pushDirection = 1 - 2*turn;
+    int pushRank = 1 + turn*5;
+    int epRank = 4 - turn;
+
+    while(pawns) {
+        int pos = popLSB(&pawns);
+        uint64_t movesBitboard = pawnAttacks[pos][turn] & g_board.colorBitboards[1-turn];
+        movesBitboard |= pawnAdvances[pos][turn] & (~g_board.bitboard);
+
+        int rank = pos / 8;
+        if(rank == pushRank && ((g_board.bitboard >> (pos + pushDirection*8)) & 1) == 0) {
+            movesBitboard |= (~g_board.bitboard) & (1ULL << (pos + pushDirection*16));
+        }
+
+        int epFile = G_EP_FILE;
+        if(epFile >= 0 && rank == epRank && (GEN_ALL || GEN_CAPTURES)) {
+            int file = pos & 7;
+            uint64_t epBitboard = 0;
+            if(file + 1 == epFile) {
+                epBitboard |= rightPawnAttacks[pos][turn];
+            } else if(file - 1 == epFile) {
+                epBitboard |= leftPawnAttacks[pos][turn];
+            }
+
+            while(epBitboard) {
+                moves[numMoves++] = create_move(pos, popLSB(&epBitboard), MOVE_EP_CAPTURE);
+            }
+        }
+
+        movesBitboard &= captureMask;
+        while(movesBitboard) {
+            int dest = popLSB(&movesBitboard);
+            int destRank = dest / 8;
+            if(destRank == 0 || destRank == 7) {
+                moves[numMoves++] = create_move(pos, dest, MOVE_KNIGHT_PROMOTION);
+                moves[numMoves++] = create_move(pos, dest, MOVE_BISHOP_PROMOTION);
+                moves[numMoves++] = create_move(pos, dest, MOVE_ROOK_PROMOTION);
+                moves[numMoves++] = create_move(pos, dest, MOVE_QUEEN_PROMOTION);
+            } else {
+                moves[numMoves++] = create_move(pos, dest, MOVE_QUIET);
+            }
+        }
+    }
+
+    uint64_t knights = G_KNIGHTS(turn);
+    while(knights) {
+        int pos = popLSB(&knights);
+        uint64_t movesBitboard = knightAttacks[pos] & ~g_board.colorBitboards[turn] & captureMask;
+        while(movesBitboard) {
+            moves[numMoves++] = create_move(pos, popLSB(&movesBitboard), MOVE_QUIET);
+        }
+    }
+
+    uint64_t diagonals = G_BISHOPS(turn) | G_QUEENS(turn);
+    while(diagonals) {
+        int pos = popLSB(&diagonals);
+        uint64_t blockers = bishopMoves[pos] & g_board.bitboard;
+        uint64_t movesBitboard = *GET_VALUE(bishopMagicTables[pos], &blockers) & ~g_board.colorBitboards[turn] & captureMask;
+        
+        while(movesBitboard) {
+            moves[numMoves++] = create_move(pos, popLSB(&movesBitboard), MOVE_QUIET);
+        }     
+    }
+    
+    uint64_t sliders = G_ROOKS(turn) | G_QUEENS(turn);
+    while(sliders) {
+        int pos = popLSB(&sliders);
+        uint64_t blockers = rookMoves[pos] & g_board.bitboard;
+        uint64_t movesBitboard = *GET_VALUE(rookMagicTables[pos], &blockers) & ~g_board.colorBitboards[turn] & captureMask;
+        while(movesBitboard) {
+            moves[numMoves++] = create_move(pos, popLSB(&movesBitboard), MOVE_QUIET);
+        }
+    }
+    
+    if(checkers == 0 && (genType == GEN_ALL || genType == GEN_QUIETS)) {
+        uint64_t castleCheck = (attackedSquares | g_board.bitboard) ^ G_KINGS(turn);
+        if(turn == WHITE) {
+            if(G_HAS_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT) && (castleCheck & WHITE_KINGSIDE_CASTLE_MASK) == 0 && g_board.pieceCodes[6] == EMPTY) {
+                moves[numMoves++] = create_move(kingPos, kingPos + 2, MOVE_KINGSIDE_CASTLE);
+            }
+            if(G_HAS_CASTLE_RIGHT(WHITE_CASTLE_QUEENSIDE_RIGHT) && (castleCheck & WHITE_QUEENSIDE_CASTLE_MASK) == 0 && g_board.pieceCodes[1] == EMPTY) {
+                moves[numMoves++] = create_move(kingPos, kingPos - 2, MOVE_QUEENSIDE_CASTLE);
+            }
+        } else if(turn == BLACK) {
+            if(G_HAS_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT) && (castleCheck & BLACK_KINGSIDE_CASTLE_MASK) == 0 && g_board.pieceCodes[62] == EMPTY) {
+                moves[numMoves++] = create_move(kingPos, kingPos + 2, MOVE_KINGSIDE_CASTLE);
+            }
+            if(G_HAS_CASTLE_RIGHT(BLACK_CASTLE_QUEENSIDE_RIGHT) && (castleCheck & BLACK_QUEENSIDE_CASTLE_MASK) == 0 && g_board.pieceCodes[57] == EMPTY) {
+                moves[numMoves++] = create_move(kingPos, kingPos - 2, MOVE_QUEENSIDE_CASTLE);
+            }
+        }
+    }
+
+    totalTime += micros() - foo;
+    return numMoves;
+}
+
+int generateLegalMoves(Board *board, uint16_t *moves, int genType) {
+    unsigned long foo = micros();
+    int turn = TURN(*board);
+    int oppTurn = 1 - turn;
+    uint64_t kingBitboard = KINGS(*board, turn);
+    int kingPos = getLSB(&kingBitboard);
+    board->mateStatus = NO_MATE;
+    
+    uint64_t captureMask = 0xFFFFFFFFFFFFFFFF;
+    if(genType == GEN_CAPTURES) captureMask = board->colorBitboards[oppTurn];
+    else if(genType == GEN_QUIETS) captureMask = ~board->colorBitboards[oppTurn];
+
     attackedSquares = 0;    
     numCheckers = 0;
     checkers = 0;
@@ -443,20 +537,20 @@ int generateLegalMoves(uint16_t *moves) {
     
     memset(pinRays, 255, 64*8);
 
-    uint64_t knights = knights(oppTurn);
+    uint64_t knights = KNIGHTS(*board, oppTurn);
     while(knights) {
         attackedSquares |= knightAttacks[popLSB(&knights)];
     }
 
-    uint64_t pawns = pawns(oppTurn);
+    uint64_t pawns = PAWNS(*board, oppTurn);
     while(pawns) {
         attackedSquares |= pawnAttacks[popLSB(&pawns)][oppTurn];
     }
 
-    uint64_t diagonals = bishops(oppTurn) | queens(oppTurn);
+    uint64_t diagonals = BISHOPS(*board, oppTurn) | QUEENS(*board, oppTurn);
     while(diagonals) {
         int index = popLSB(&diagonals);
-        uint64_t blockers = bishopMoves[index] & (board.bitboard & ~kingBitboard);
+        uint64_t blockers = bishopMoves[index] & (board->bitboard & ~kingBitboard);
         uint64_t move = *GET_VALUE(bishopMagicTables[index], &blockers);
         attackedSquares |= move;
         
@@ -464,7 +558,7 @@ int generateLegalMoves(uint16_t *moves) {
         if(dir != NONE) {
             uint64_t kingBlocker = kingBitboard & directionalMoves[index][dir];
             uint64_t movesToKing = (directionalMoves[index][dir] & *GET_VALUE(bishopMagicTables[index], &kingBlocker)) & ~kingBitboard;
-            uint64_t kingGuards = board.bitboard & movesToKing;
+            uint64_t kingGuards = board->bitboard & movesToKing;
             if(move & kingBitboard) {
                 checkMask = movesToKing | (1ULL << index);
             } else if(popCount(kingGuards) == 1) {
@@ -474,10 +568,10 @@ int generateLegalMoves(uint16_t *moves) {
         }
     }
     
-    uint64_t sliders = rooks(oppTurn) | queens(oppTurn);
+    uint64_t sliders = ROOKS(*board, oppTurn) | QUEENS(*board, oppTurn);
     while(sliders) {   
         int index = popLSB(&sliders);
-        uint64_t blockers = rookMoves[index] & (board.bitboard & ~kingBitboard);
+        uint64_t blockers = rookMoves[index] & (board->bitboard & ~kingBitboard);
         uint64_t move = *GET_VALUE(rookMagicTables[index], &blockers);
         attackedSquares |= move;
         
@@ -485,7 +579,7 @@ int generateLegalMoves(uint16_t *moves) {
         if(dir != NONE) {
             uint64_t kingBlocker = kingBitboard & directionalMoves[index][dir];
             uint64_t movesToKing = (directionalMoves[index][dir] & *GET_VALUE(rookMagicTables[index], &kingBlocker)) & ~kingBitboard;
-            uint64_t kingGuards = board.bitboard & movesToKing;
+            uint64_t kingGuards = board->bitboard & movesToKing;
             if(move & kingBitboard) {
                 checkMask = movesToKing | (1ULL << index);
             } else if(popCount(kingGuards) == 1) {
@@ -495,18 +589,18 @@ int generateLegalMoves(uint16_t *moves) {
         }
     }
     
-    int opponentKingPos = getLSB(&kings(oppTurn));
+    int opponentKingPos = getLSB(&KINGS(*board, oppTurn));
     attackedSquares |= kingMoves[opponentKingPos] & ~attackedSquares;
     if(((attackedSquares >> kingPos) & 1) == 1) {
-        uint64_t pawnAndKnightCheckers = (pawnAttacks[kingPos][turn] & pawns(oppTurn)) | (knightAttacks[kingPos] & knights(oppTurn));
+        uint64_t pawnAndKnightCheckers = (pawnAttacks[kingPos][turn] & PAWNS(*board, oppTurn)) | (knightAttacks[kingPos] & KNIGHTS(*board, oppTurn));
         checkers |= pawnAndKnightCheckers;
         checkMask |= pawnAndKnightCheckers;
-        uint64_t blockers = bishopMoves[kingPos] & board.bitboard;
+        uint64_t blockers = bishopMoves[kingPos] & board->bitboard;
         uint64_t diagonalAttacks = *GET_VALUE(bishopMagicTables[kingPos], &blockers);
-        blockers = rookMoves[kingPos] & board.bitboard;
+        blockers = rookMoves[kingPos] & board->bitboard;
         uint64_t slidingAttacks = *GET_VALUE(rookMagicTables[kingPos], &blockers);
-        checkers |= diagonalAttacks & (bishops(oppTurn) | queens(oppTurn));
-        checkers |= slidingAttacks & (rooks(oppTurn) | queens(oppTurn));
+        checkers |= diagonalAttacks & (BISHOPS(*board, oppTurn) | QUEENS(*board, oppTurn));
+        checkers |= slidingAttacks & (ROOKS(*board, oppTurn) | QUEENS(*board, oppTurn));
         numCheckers = popCount(checkers);
     }
     if(numCheckers == 0) {
@@ -514,42 +608,49 @@ int generateLegalMoves(uint16_t *moves) {
     }
 
     int numMoves = 0;
-    uint64_t kingMovesBitboard = kingMoves[kingPos] & ~(attackedSquares | board.colorBitboards[turn]);
+    uint64_t kingMovesBitboard = captureMask & kingMoves[kingPos] & ~(attackedSquares | board->colorBitboards[turn]);
     while(kingMovesBitboard) {
         moves[numMoves++] = create_move(kingPos, popLSB(&kingMovesBitboard), MOVE_QUIET);
     }
 
-    if(numCheckers == 2) return numMoves;
+    if(numCheckers == 2) {
+        if(numMoves == 0) board->mateStatus = CHECK_MATE;
+        return numMoves; 
+    }
 
-    pawns = pawns(turn);
+    pawns = PAWNS(*board, turn);
     int pushDirection = 1 - 2*turn;
     int pushRank = 1 + turn*5;
     int epRank = 4 - turn;
 
     while(pawns) {
         int pos = popLSB(&pawns);
-        uint64_t movesBitboard = pawnAttacks[pos][turn] & board.colorBitboards[1-turn];
-        movesBitboard |= pawnAdvances[pos][turn] & (~board.bitboard);
+        uint64_t movesBitboard = pawnAttacks[pos][turn] & board->colorBitboards[1-turn];
+        movesBitboard |= pawnAdvances[pos][turn] & (~board->bitboard);
 
         int rank = pos / 8;
-        if(rank == pushRank && ((board.bitboard >> (pos + pushDirection*8)) & 1) == 0) {
-            movesBitboard |= (~board.bitboard) & (1ULL << (pos + pushDirection*16));
+        if(rank == pushRank && ((board->bitboard >> (pos + pushDirection*8)) & 1) == 0) {
+            movesBitboard |= (~board->bitboard) & (1ULL << (pos + pushDirection*16));
         }
 
-        int epFile = board_getEPFile();
-        if(epFile >= 0 && rank == epRank) {
+        int epFile = EP_FILE(*board);
+        if(epFile >= 0 && rank == epRank && (GEN_ALL || GEN_CAPTURES)) {
             int file = pos & 7;
             int canTake = TRUE;
 
-            uint64_t slidingPiecesOnRank = (queens(oppTurn) | rooks(oppTurn)) & rankMasks[rank];
+            uint64_t slidingPiecesOnRank = (QUEENS(*board, oppTurn) | ROOKS(*board, oppTurn)) & rankMasks[rank];
 
-            if((kings(turn) & rankMasks[rank]) != 0) {
+            if((KINGS(*board, turn) & rankMasks[rank]) != 0) {
                 while(slidingPiecesOnRank) {
                     int slidingPiece = popLSB(&slidingPiecesOnRank);
-                    int dir = positionToDirectionMap[slidingPiece][getLSB(&kings(turn))];
-                    uint64_t kingBlocker = kings(turn) & directionalMoves[slidingPiece][dir];
-                    uint64_t movesToKing = (directionalMoves[slidingPiece][dir] & *GET_VALUE(rookMagicTables[slidingPiece], &kingBlocker)) & ~kings(turn);
-                    uint64_t kingGuards = board.bitboard & movesToKing;
+                    int dir = positionToDirectionMap[slidingPiece][getLSB(&KINGS(*board, turn))];
+                    uint64_t kingBlocker = KINGS(*board, turn) & directionalMoves[slidingPiece][dir];
+                    uint64_t movesToKing = (directionalMoves[slidingPiece][dir] & *GET_VALUE(rookMagicTables[slidingPiece], &kingBlocker)) & ~KINGS(*board, turn);
+                    if((movesToKing & (1ULL << pos)) == 0) {
+                        canTake = TRUE;
+                        break;
+                    }
+                    uint64_t kingGuards = board->bitboard & movesToKing;
                     if(popCount(kingGuards) == 2) {
                         canTake = FALSE; 
                         break;
@@ -583,7 +684,7 @@ int generateLegalMoves(uint16_t *moves) {
             }
         }
 
-        movesBitboard &= pinRays[pos] & checkMask;
+        movesBitboard &= pinRays[pos] & checkMask & captureMask;
         while(movesBitboard) {
             int dest = popLSB(&movesBitboard);
             int destRank = dest / 8;
@@ -598,57 +699,63 @@ int generateLegalMoves(uint16_t *moves) {
         }
     }
 
-    knights = knights(turn);
+    knights = KNIGHTS(*board, turn);
     while(knights) {
         
         int pos = popLSB(&knights);
-        uint64_t movesBitboard = knightAttacks[pos] & ~board.colorBitboards[turn] & pinRays[pos] & checkMask;
+        uint64_t movesBitboard = knightAttacks[pos] & ~board->colorBitboards[turn] & pinRays[pos] & checkMask & captureMask;
         while(movesBitboard) {
             moves[numMoves++] = create_move(pos, popLSB(&movesBitboard), MOVE_QUIET);
         }
     }
 
-    diagonals = bishops(turn) | queens(turn);
+    diagonals = BISHOPS(*board, turn) | QUEENS(*board, turn);
     while(diagonals) {
         int pos = popLSB(&diagonals);
-        uint64_t blockers = bishopMoves[pos] & board.bitboard;
-        uint64_t movesBitboard = *GET_VALUE(bishopMagicTables[pos], &blockers) & ~board.colorBitboards[turn] & pinRays[pos] & checkMask;
+        uint64_t blockers = bishopMoves[pos] & board->bitboard;
+        uint64_t movesBitboard = *GET_VALUE(bishopMagicTables[pos], &blockers) & ~board->colorBitboards[turn] & pinRays[pos] & checkMask & captureMask;
         
         while(movesBitboard) {
             moves[numMoves++] = create_move(pos, popLSB(&movesBitboard), MOVE_QUIET);
         }     
     }
     
-    sliders = rooks(turn) | queens(turn);
+    sliders = ROOKS(*board, turn) | QUEENS(*board, turn);
     while(sliders) {
         int pos = popLSB(&sliders);
-        uint64_t blockers = rookMoves[pos] & board.bitboard;
-        uint64_t movesBitboard = *GET_VALUE(rookMagicTables[pos], &blockers) & ~board.colorBitboards[turn] & pinRays[pos] & checkMask;
+        uint64_t blockers = rookMoves[pos] & board->bitboard;
+        uint64_t movesBitboard = *GET_VALUE(rookMagicTables[pos], &blockers) & ~board->colorBitboards[turn] & pinRays[pos] & checkMask & captureMask;
         while(movesBitboard) {
             moves[numMoves++] = create_move(pos, popLSB(&movesBitboard), MOVE_QUIET);
         }
     }
     
-    if(checkers == 0) {
-        uint64_t castleCheck = (attackedSquares | board.bitboard) ^ kings(turn);
+    if(checkers == 0 && (genType == GEN_ALL || genType == GEN_QUIETS)) {
+        uint64_t castleCheck = (attackedSquares | board->bitboard) ^ KINGS(*board, turn);
         if(turn == WHITE) {
-            if(board_hasCastleRight(WHITE_CASTLE_KINGSIDE_RIGHT) && (castleCheck & WHITE_KINGSIDE_CASTLE_MASK) == 0 && board.pieceCodes[6] == EMPTY) {
+            if(HAS_CASTLE_RIGHT(*board, WHITE_CASTLE_KINGSIDE_RIGHT) && (castleCheck & WHITE_KINGSIDE_CASTLE_MASK) == 0 && board->pieceCodes[6] == EMPTY) {
                 moves[numMoves++] = create_move(kingPos, kingPos + 2, MOVE_KINGSIDE_CASTLE);
             }
-            if(board_hasCastleRight(WHITE_CASTLE_QUEENSIDE_RIGHT) && (castleCheck & WHITE_QUEENSIDE_CASTLE_MASK) == 0 && board.pieceCodes[1] == EMPTY) {
+            if(HAS_CASTLE_RIGHT(*board, WHITE_CASTLE_QUEENSIDE_RIGHT) && (castleCheck & WHITE_QUEENSIDE_CASTLE_MASK) == 0 && board->pieceCodes[1] == EMPTY) {
                 moves[numMoves++] = create_move(kingPos, kingPos - 2, MOVE_QUEENSIDE_CASTLE);
             }
         } else if(turn == BLACK) {
-            if(board_hasCastleRight(BLACK_CASTLE_KINGSIDE_RIGHT) && (castleCheck & BLACK_KINGSIDE_CASTLE_MASK) == 0 && board.pieceCodes[62] == EMPTY) {
+            if(HAS_CASTLE_RIGHT(*board, BLACK_CASTLE_KINGSIDE_RIGHT) && (castleCheck & BLACK_KINGSIDE_CASTLE_MASK) == 0 && board->pieceCodes[62] == EMPTY) {
                 moves[numMoves++] = create_move(kingPos, kingPos + 2, MOVE_KINGSIDE_CASTLE);
             }
-            if(board_hasCastleRight(BLACK_CASTLE_QUEENSIDE_RIGHT) && (castleCheck & BLACK_QUEENSIDE_CASTLE_MASK) == 0 && board.pieceCodes[57] == EMPTY) {
+            if(HAS_CASTLE_RIGHT(*board, BLACK_CASTLE_QUEENSIDE_RIGHT) && (castleCheck & BLACK_QUEENSIDE_CASTLE_MASK) == 0 && board->pieceCodes[57] == EMPTY) {
                 moves[numMoves++] = create_move(kingPos, kingPos - 2, MOVE_QUEENSIDE_CASTLE);
             }
         }
     }
 
     totalTime += micros() - foo;
+
+    if(numMoves == 0) {
+        if(numCheckers == 0) board->mateStatus = STALE_MATE;
+        else board->mateStatus = CHECK_MATE;
+    }
+
     return numMoves;
 }
 

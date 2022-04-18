@@ -3,13 +3,14 @@
 #include "Board.h"
 #include "MoveGenerator.h"
 #include "Search.h"
+#include "Book.h"
 #include <stdio.h>
 
-int execute(char *input);
-void cmdMove(char **args, int argc);
-void cmdPrintBoard(char **args, int argc);
-void cmdLoad(char **args, int argc);
-void cmdPerft(char **args);
-void cmdUndo();
-void cmdPrintMoves();
-void cmdTest();
+int cmd_execute(char *input);
+void cmd_move(char **args, int argc);
+void cmd_printBoard(char **args, int argc);
+void cmd_load(char **args, int argc);
+void cmd_perft(char **args);
+void cmd_undo();
+void cmd_printMoves();
+void cmd_test();

@@ -5,9 +5,25 @@
 #include "Board.h"
 #include "Commands.h"
 #include "MoveGenerator.h"
+#include "Book.h"
 
 int main() {
-    loadFENStr(STARTING_FEN);
+
+    initMoveGenerator();
+    z_init();
+    //bk_parseAll("/home/sam/GitHub/Carlsim/Book/PGN/");
+    //bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Tournaments (1975-2021)/WijkaanZee2017.pgn");
+    /*
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Bucharest2021.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Moscow2020.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/SaintLouis2021.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Stavanger2020.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Stavanger2021.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/WijkaanZee2020.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/WijkaanZee2021.pgn");
+    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/WijkaanZee2022.pgn");
+    */
+    loadFENStr(&g_board, STARTING_FEN);
     
     printf("-----------------------------------------------------------------------------------------------------------------------------\n\n");
     printf("        CCCCCCCCCCCCC                                    lllllll    SSSSSSSSSSSSSSS IIIIIIIIIIMMMMMMMM               MMMMMMMM\n");
@@ -30,16 +46,16 @@ int main() {
 
     char *command = NULL;
     size_t len = 0;
-    initMoveGenerator();
+    
 
     while(1) {
 
         while(len == 0) {
-            getline(&command, &len, stdin);
+            ssize_t a = getline(&command, &len, stdin);
         }
         len = 0;
 
-        int quit = execute(command);
+        int quit = cmd_execute(command);
         if(quit) return 0;      
     }
 }
