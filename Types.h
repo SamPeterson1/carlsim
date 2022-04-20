@@ -35,4 +35,13 @@ typedef struct MagicHashTable_s {
     MHTItem **items;
 } MagicHashTable;
 
+typedef struct TTEntry_s {
+    ZobristKey key;
+    uint16_t bestMove;
+
+    int eval;
+    int depth;
+    int type;
+} TTEntry;
+
 #endif

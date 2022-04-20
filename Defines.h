@@ -30,12 +30,11 @@
 
 #define Z_MAX 0xFFFFFFFFFFFFFFFF;
 #define Z_KEY uint64_t
-#define PAWN_VALUE 100
-#define PAWN_VALUE 100
-#define KNIGHT_VALUE 300
+#define PAWN_VALUE 71
+#define KNIGHT_VALUE 293
 #define BISHOP_VALUE 300
-#define ROOK_VALUE 500
-#define QUEEN_VALUE 900
+#define ROOK_VALUE 456
+#define QUEEN_VALUE 905
 #define EVAL_INF 65535
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -135,5 +134,14 @@
 
 #define MAX_ARG_COUNT 64
 #define MAX_ARG_LENGTH 256
+
+#define TT_TABLE_SIZE 4294967296 //2^32
+#define TT_LOOKUP_FAILED -2147483647
+
+#define TT_EXACT 0
+#define TT_UPPERBOUND 1
+#define TT_LOWERBOUND 2
+
+#define MOVE_INVALID 0
 
 #endif

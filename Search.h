@@ -11,6 +11,7 @@
 #include "Eval.h"
 #include "Moves.h"
 #include "Book.h"
+#include "TranspositionTable.h"
 
 uint16_t findBestMove(int depth);
 void s_init();
