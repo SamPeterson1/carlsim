@@ -1,25 +1,25 @@
 #include "Moves.h"
 
 int compareMoves(uint16_t a, uint16_t b) {
-    if(move_isPromotion(a)) {
-        if(move_getSpecial(a) != move_getSpecial(b)) return FALSE;
+    if(MOVE_IS_PROMOTION(a)) {
+        if(MOVE_GET_SPECIAL(a) != MOVE_GET_SPECIAL(b)) return FALSE;
     }
-    return move_origin(a) == move_origin(b) && move_dest(a) == move_dest(b);
+    return  MOVE_ORIGIN(a) ==  MOVE_ORIGIN(b) &&  MOVE_DEST(a) ==  MOVE_DEST(b);
 }
 
 void toStr(uint16_t move, char *str) {
-    getSquareStr(move_origin(move), str);
-    getSquareStr(move_dest(move), str+2);
-    if(move_getSpecial(move) == MOVE_KNIGHT_PROMOTION) {
+    getSquareStr( MOVE_ORIGIN(move), str);
+    getSquareStr( MOVE_DEST(move), str+2);
+    if(MOVE_GET_SPECIAL(move) == MOVE_KNIGHT_PROMOTION) {
         str[4] = '=';
         str[5] = 'N';
-    } else if(move_getSpecial(move) == MOVE_BISHOP_PROMOTION) {
+    } else if(MOVE_GET_SPECIAL(move) == MOVE_BISHOP_PROMOTION) {
         str[4] = '=';
         str[5] = 'B';
-    } else if(move_getSpecial(move) == MOVE_ROOK_PROMOTION) {
+    } else if(MOVE_GET_SPECIAL(move) == MOVE_ROOK_PROMOTION) {
         str[4] = '=';
         str[5] = 'R';
-    } else if(move_getSpecial(move) == MOVE_QUEEN_PROMOTION) {
+    } else if(MOVE_GET_SPECIAL(move) == MOVE_QUEEN_PROMOTION) {
         str[4] = '=';
         str[5] = 'Q';
     } else {
@@ -54,12 +54,12 @@ static inline int popLSB(uint64_t *a) {
     return index;
 }
 
-uint16_t parseAlgebraicMove(Board *board, char *str) {
+uint16_t parseAlgebraicMove(char *str) {
 
-    int turn = TURN(*board);
+    int turn = TURN;
     unsigned char piece = turn;
     uint16_t moves[256];
-    int numMoves = generateLegalMoves(board, moves, GEN_ALL);
+    int numMoves = generateLegalMoves(moves, GEN_ALL);
     int origin = 0;
     int dest = 0;
     int special = 0;
@@ -108,7 +108,7 @@ uint16_t parseAlgebraicMove(Board *board, char *str) {
             int destFile = getFile(str[2]);
             int destRank = getRank(str[3]);
             dest = destRank * 8 + destFile;
-            if(board->pieceCodes[dest] == EMPTY) special = MOVE_EP_CAPTURE;
+            if(g_board.pieceCodes[dest] == EMPTY) special = MOVE_EP_CAPTURE;
             if(turn == WHITE) origin = getFile(str[0]) + 8*(destRank-1);
             else origin = getFile(str[0]) + 8*(destRank+1);
         } else if(len == 2) {
@@ -142,7 +142,7 @@ uint16_t parseAlgebraicMove(Board *board, char *str) {
         char destChar[2] = {str[len-2], str[len-1]};
         dest = getSquareFromStr(destChar);
 
-        uint64_t candidates = board->pieces[PIECE_TYPE(piece) >> 1][turn];
+        uint64_t candidates = g_board.pieces[PIECE_TYPE(piece) >> 1][turn];
         int specRank = -1;
         int specFile = -1;
 
@@ -212,67 +212,67 @@ uint16_t parseMove(char *str) {
     return create_move(origin, dest, special);
 }
 
-unsigned char makeMove(Board *board, uint16_t move) {
-    int special = move_getSpecial(move);
-    int origin = move_origin(move);
-    int dest = move_dest(move);
-    int turn = G_TURN;
+unsigned char makeMove(uint16_t move) {
+    int special = MOVE_GET_SPECIAL(move);
+    int origin =  MOVE_ORIGIN(move);
+    int dest =  MOVE_DEST(move);
+    int turn = TURN;
 
     int newEpFile = -1;
-    unsigned char lastCapture = board->pieceCodes[dest];
+    unsigned char lastCapture = g_board.pieceCodes[dest];
 
-    z_hashGameState(board->gameState, &board->zobrist);
+    z_hashGameState(g_board.gameState, &g_board.zobrist);
 
     if(special == MOVE_KINGSIDE_CASTLE) {
         if(turn == WHITE) {
-            clearIndex(board, 4); setIndex(board, 6, WHITE | KING);
-            clearIndex(board, 7); setIndex(board, 5, WHITE | ROOK);
-            REMOVE_CASTLE_RIGHT(*board, WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
+            clearIndex(4); setIndex(6, WHITE | KING);
+            clearIndex(7); setIndex(5, WHITE | ROOK);
+            REMOVE_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
         } else {
-            clearIndex(board, 60); setIndex(board, 62, BLACK | KING);
-            clearIndex(board, 63); setIndex(board, 61, BLACK | ROOK);
-            REMOVE_CASTLE_RIGHT(*board, BLACK_CASTLE_KINGSIDE_RIGHT | BLACK_CASTLE_QUEENSIDE_RIGHT);
+            clearIndex(60); setIndex(62, BLACK | KING);
+            clearIndex(63); setIndex(61, BLACK | ROOK);
+            REMOVE_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT | BLACK_CASTLE_QUEENSIDE_RIGHT);
         }  
     } else if(special == MOVE_QUEENSIDE_CASTLE) {
         if(turn == WHITE) {
-            clearIndex(board, 4); setIndex(board, 2, WHITE | KING);
-            clearIndex(board, 0); setIndex(board, 3, WHITE | ROOK);
-            REMOVE_CASTLE_RIGHT(*board, WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
+            clearIndex(4); setIndex(2, WHITE | KING);
+            clearIndex(0); setIndex(3, WHITE | ROOK);
+            REMOVE_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
         } else {
-            clearIndex(board, 60); setIndex(board, 58, BLACK | KING);
-            clearIndex(board, 56); setIndex(board, 59, BLACK | ROOK);
-            REMOVE_CASTLE_RIGHT(*board, BLACK_CASTLE_KINGSIDE_RIGHT | BLACK_CASTLE_QUEENSIDE_RIGHT);
+            clearIndex(60); setIndex(58, BLACK | KING);
+            clearIndex(56); setIndex(59, BLACK | ROOK);
+            REMOVE_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT | BLACK_CASTLE_QUEENSIDE_RIGHT);
         }
     } else if(special == MOVE_EP_CAPTURE) {
-        int epFile = EP_FILE(*board);
+        int epFile = EP_FILE;
         int rank = origin/8;
-        setIndex(board, dest, board->pieceCodes[origin]);
-        setIndex(board, epFile + 8*rank, EMPTY);
-        setIndex(board, origin, EMPTY);
+        setIndex(dest, g_board.pieceCodes[origin]);
+        setIndex(epFile + 8*rank, EMPTY);
+        setIndex(origin, EMPTY);
         lastCapture = PAWN | (1-turn);
-    } else if(move_isPromotion(move)) {
-        clearIndex(board, origin);
+    } else if(MOVE_IS_PROMOTION(move)) {
+        clearIndex(origin);
         if(special == MOVE_KNIGHT_PROMOTION) {
-            setIndex(board, dest, KNIGHT | turn);
+            setIndex(dest, KNIGHT | turn);
         } else if(special == MOVE_BISHOP_PROMOTION) {
-            setIndex(board, dest, BISHOP | turn);
+            setIndex(dest, BISHOP | turn);
         } else if(special == MOVE_ROOK_PROMOTION) {
-            setIndex(board, dest, ROOK | turn);
+            setIndex(dest, ROOK | turn);
         } else if(special == MOVE_QUEEN_PROMOTION) {
-            setIndex(board, dest, QUEEN | turn);
+            setIndex(dest, QUEEN | turn);
         }
     } else {
-        if(board->pieceCodes[origin] == (WHITE | KING))
-            REMOVE_CASTLE_RIGHT(*board, WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
-        else if(board->pieceCodes[origin] == (BLACK | KING))
-            REMOVE_CASTLE_RIGHT(*board, BLACK_CASTLE_KINGSIDE_RIGHT | BLACK_CASTLE_QUEENSIDE_RIGHT);
+        if(g_board.pieceCodes[origin] == (WHITE | KING))
+            REMOVE_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT | WHITE_CASTLE_QUEENSIDE_RIGHT);
+        else if(g_board.pieceCodes[origin] == (BLACK | KING))
+            REMOVE_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT | BLACK_CASTLE_QUEENSIDE_RIGHT);
         
-        if(PIECE_TYPE(board->pieceCodes[origin]) == PAWN && abs(origin - dest) == 16) {
+        if(PIECE_TYPE(g_board.pieceCodes[origin]) == PAWN && abs(origin - dest) == 16) {
             newEpFile = origin & 7;
         } 
 
-        setIndex(board, dest, board->pieceCodes[origin]);
-        clearIndex(board, origin);
+        setIndex(dest, g_board.pieceCodes[origin]);
+        clearIndex(origin);
     }
 
     int revokedRights = 0;
@@ -281,52 +281,59 @@ unsigned char makeMove(Board *board, uint16_t move) {
     if(origin == 56 || dest == 56) revokedRights |= BLACK_CASTLE_QUEENSIDE_RIGHT;
     if(origin == 63 || dest == 63) revokedRights |= BLACK_CASTLE_KINGSIDE_RIGHT;
 
-    REMOVE_CASTLE_RIGHT(*board, revokedRights);
+    REMOVE_CASTLE_RIGHT(revokedRights);
     
-    SET_EP_FILE(*board, newEpFile);
-    board->gameState ^= 0x100;
-    z_hashGameState(board->gameState, &board->zobrist);
+    SET_EP_FILE(newEpFile);
+    g_board.gameState ^= 256;
+    z_hashGameState(g_board.gameState, &g_board.zobrist);
+
+    if(lastCapture == EMPTY) {
+        SET_HALFMOVE_COUNTER(HALFMOVE_COUNTER + 1);
+    } else {
+        SET_HALFMOVE_COUNTER(0);
+    }
+
     return lastCapture;
 }
 
-void unMakeMove(Board *board, uint16_t move, unsigned char lastCapture, uint16_t lastGameState) {
-    board->gameState = lastGameState;
+void unMakeMove(uint16_t move, unsigned char lastCapture, uint16_t lastGameState) {
+    g_board.gameState = lastGameState;
 
-    int special = move_getSpecial(move);
-    int origin = move_origin(move);
-    int dest = move_dest(move);
-    int turn = G_TURN;
-    z_hashGameState(board->gameState, &board->zobrist);
+    int special = MOVE_GET_SPECIAL(move);
+    int origin =  MOVE_ORIGIN(move);
+    int dest =  MOVE_DEST(move);
+    int turn = TURN;
+    z_hashGameState(g_board.gameState, &g_board.zobrist);
 
     if(special == MOVE_KINGSIDE_CASTLE) {
         if(turn == WHITE) {
-            clearIndex(board, 6); setIndex(board, 4, WHITE | KING);
-            clearIndex(board, 5); setIndex(board, 7, WHITE | ROOK);
+            clearIndex(6); setIndex(4, WHITE | KING);
+            clearIndex(5); setIndex(7, WHITE | ROOK);
         } else {
-            clearIndex(board, 62); setIndex(board, 60, BLACK | KING);
-            clearIndex(board, 61); setIndex(board, 63, BLACK | ROOK);
+            clearIndex(62); setIndex(60, BLACK | KING);
+            clearIndex(61); setIndex(63, BLACK | ROOK);
         }   
     } else if(special == MOVE_QUEENSIDE_CASTLE) {
         if(turn == WHITE) {
-            clearIndex(board, 2); setIndex(board, 4, WHITE | KING);
-            clearIndex(board, 3); setIndex(board, 0, WHITE | ROOK);
+            clearIndex(2); setIndex(4, WHITE | KING);
+            clearIndex(3); setIndex(0, WHITE | ROOK);
         } else {
-            clearIndex(board, 58); setIndex(board, 60, BLACK | KING);
-            clearIndex(board, 59); setIndex(board, 56, BLACK | ROOK);
+            clearIndex(58); setIndex(60, BLACK | KING);
+            clearIndex(59); setIndex(56, BLACK | ROOK);
         }
     } else if(special == MOVE_EP_CAPTURE) {
-        int epFile = EP_FILE(*board);
+        int epFile = EP_FILE;
         int rank = origin / 8;
-        setIndex(board, origin, board->pieceCodes[dest]);
-        setIndex(board, epFile + 8*rank, lastCapture);
-        clearIndex(board, dest);
-    } else if(move_isPromotion(move)) {
-        setIndex(board, dest, lastCapture);
-        setIndex(board, origin, turn | PAWN);
+        setIndex(origin, g_board.pieceCodes[dest]);
+        setIndex(epFile + 8*rank, lastCapture);
+        clearIndex(dest);
+    } else if(MOVE_IS_PROMOTION(move)) {
+        setIndex(dest, lastCapture);
+        setIndex(origin, turn | PAWN);
     } else {
-        setIndex(board, origin, board->pieceCodes[dest]);
-        setIndex(board, dest, lastCapture);
+        setIndex(origin, g_board.pieceCodes[dest]);
+        setIndex(dest, lastCapture);
     }
 
-    z_hashGameState(board->gameState, &board->zobrist);
+    z_hashGameState(g_board.gameState, &g_board.zobrist);
 }

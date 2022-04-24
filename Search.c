@@ -63,15 +63,15 @@ int quiescense(int alpha, int beta) {
     if(eval > alpha) alpha = eval;
 
     uint16_t moves[256];
-    int numMoves = generateLegalMoves(&g_board, moves, GEN_ALL);
+    int numMoves = generateLegalMoves(moves, GEN_ALL);
 
     orderMoves(moves, numMoves);
     for(int i = 0; i < numMoves; i ++) {
-        if(move_getSpecial(moves[i]) == MOVE_EP_CAPTURE || g_board.pieceCodes[move_dest(moves[i])] != EMPTY) {
+        if(MOVE_GET_SPECIAL(moves[i]) == MOVE_EP_CAPTURE || g_board.pieceCodes[ MOVE_DEST(moves[i])] != EMPTY) {
             uint16_t lastGameState = g_board.gameState;
-            uint16_t lastCapture = makeMove(&g_board, moves[i]);
+            uint16_t lastCapture = makeMove(moves[i]);
             eval = -quiescense(-beta, -alpha);
-            unMakeMove(&g_board, moves[i], lastCapture, lastGameState);
+            unMakeMove(moves[i], lastCapture, lastGameState);
             if(eval >= beta) return beta;
             if(eval >= alpha) {
                 alpha = eval;
@@ -95,16 +95,16 @@ int negamax(int depth, int alpha, int beta, int distFromRoot) {
         uint16_t moves[256];
         uint16_t bestMoveInPos = MOVE_INVALID;
         int evalType = TT_UPPERBOUND;
-        int numMoves = generateLegalMoves(&g_board, moves, GEN_ALL);
+        int numMoves = generateLegalMoves(moves, GEN_ALL);
         orderMoves(moves, numMoves);
         if(g_board.mateStatus == CHECK_MATE) return -EVAL_INF/distFromRoot;
         else if(g_board.mateStatus == STALE_MATE) return 0;
         for(int i = 0; i < numMoves; i ++) {
             uint16_t lastGameState = g_board.gameState;
-            uint16_t lastCapture = makeMove(&g_board, moves[i]);
+            uint16_t lastCapture = makeMove(moves[i]);
             int eval = -negamax(depth-1, -beta, -alpha, distFromRoot + 1);
             positionsSearched ++;
-            unMakeMove(&g_board, moves[i], lastCapture, lastGameState);
+            unMakeMove(moves[i], lastCapture, lastGameState);
             if(distFromRoot == 0) {
                 printf("Searched move %d/%d\n", i+1, numMoves);
             }
@@ -136,10 +136,10 @@ uint16_t findBestMove(int depth) {
 
     unsigned long starttime = micros();
     uint16_t moves[256];
-    int numMoves = generateLegalMoves(&g_board, moves, GEN_ALL);
+    int numMoves = generateLegalMoves(moves, GEN_ALL);
     orderMoves(moves, numMoves);
     for(int d = 1; d <= depth; d ++) {
-        negamax(d, -EVAL_INF, EVAL_INF, 0);
+        negamax(d, -EVAL_INF-1, EVAL_INF+1, 0);
         printf("Depth searched: %d\n", d);
     }
 

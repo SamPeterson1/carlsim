@@ -9,10 +9,10 @@
 #include "Board.h"
 
 void printMoves(uint16_t *moves);
-unsigned char makeMove(Board *board, uint16_t move);
-void unMakeMove(Board *board, uint16_t move, unsigned char lastCapture, uint16_t lastGameState); 
+unsigned char makeMove(uint16_t move);
+void unMakeMove(uint16_t move, unsigned char lastCapture, uint16_t lastGameState); 
 uint16_t parseMove(char *str);
-uint16_t parseAlgebraicMove(Board *board, char *str);
+uint16_t parseAlgebraicMove(char *str);
 int compareMoves(uint16_t a, uint16_t b);
 void toStr(uint16_t move, char *str);
 

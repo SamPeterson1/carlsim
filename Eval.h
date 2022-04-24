@@ -8,7 +8,7 @@
 #include "TranspositionTable.h"
 #define EVAL_H
 
-int evaluate();
+int evaluate(void);
 int evalMove(uint16_t move);
 
 #endif

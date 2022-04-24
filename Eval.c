@@ -157,9 +157,9 @@ static inline int getLSB(uint64_t *a) {
     return __builtin_ctzll(*a);
 }
 
-int countMaterial() {
-    int turn = G_TURN;
-    return popCount(&G_PAWNS(turn)) + 3*popCount(&G_KNIGHTS(turn)) + 3*popCount(&G_BISHOPS(turn)) + 5*popCount(&G_ROOKS(turn)) + 9*popCount(&G_QUEENS(turn));
+int countMaterial(void) {
+    int turn = TURN;
+    return popCount(&PAWNS(turn)) + 3*popCount(&KNIGHTS(turn)) + 3*popCount(&BISHOPS(turn)) + 5*popCount(&ROOKS(turn)) + 9*popCount(&QUEENS(turn));
 }
 
 int evalMove(uint16_t move) {
@@ -170,12 +170,12 @@ int evalMove(uint16_t move) {
     }
 
     int eval = 0;
-    int turn = G_TURN;
-    int dest = move_dest(move);
-    int origin = move_origin(move);
+    int turn = TURN;
+    int dest =  MOVE_DEST(move);
+    int origin =  MOVE_ORIGIN(move);
 
     //penalize moving to square attacked by opponent pawn
-    if(PIECE_TYPE(g_board.pieceCodes[origin]) != PAWN && (pawnAttacks[dest][turn] & G_PAWNS(1-turn)) != 0) {
+    if(PIECE_TYPE(g_board.pieceCodes[origin]) != PAWN && (pawnAttacks[dest][turn] & PAWNS(1-turn)) != 0) {
         eval -= VALUE(g_board.pieceCodes[origin]);
     }
 
@@ -185,8 +185,8 @@ int evalMove(uint16_t move) {
     }
 
     //reward promotions
-    if(move_isPromotion(move)) {
-        int special = move_getSpecial(move);
+    if(MOVE_IS_PROMOTION(move)) {
+        int special = MOVE_GET_SPECIAL(move);
         if(special == MOVE_KNIGHT_PROMOTION) {
             eval += KNIGHT_VALUE;
         } else if(special == MOVE_BISHOP_PROMOTION) {
@@ -202,28 +202,28 @@ int evalMove(uint16_t move) {
     //TODO: reward checks?
 } 
 
-int evaluate() {
+int evaluate(void) {
     
     updateMateStatus();
     if(g_board.mateStatus == STALE_MATE) return 0;
-    else if(g_board.mateStatus == CHECK_MATE) return (G_TURN == WHITE) ? -EVAL_INF : EVAL_INF;   
+    else if(g_board.mateStatus == CHECK_MATE) return (TURN == WHITE) ? -EVAL_INF : EVAL_INF;   
 
     int eval = 0;
     uint64_t pieces = 0;
     for(int turn = 0; turn <= 1; turn ++) {
         int perspective = (turn == WHITE) ? 1 : -1;
-        pieces = G_PAWNS(turn);
+        pieces = PAWNS(turn);
         while(pieces) eval += (PAWN_VALUE + (int)(1.5*(double)pawns[turn][popLSB(&pieces)])) * perspective;
-        pieces = G_KNIGHTS(turn);
+        pieces = KNIGHTS(turn);
         while(pieces) eval += (KNIGHT_VALUE + (int)(1.5*(double)knights[turn][popLSB(&pieces)])) * perspective;
-        pieces = G_BISHOPS(turn);
+        pieces = BISHOPS(turn);
         while(pieces) eval += (BISHOP_VALUE + (int)(1.5*(double)bishops[turn][popLSB(&pieces)])) * perspective;
-        pieces = G_ROOKS(turn);
+        pieces = ROOKS(turn);
         while(pieces) eval += (ROOK_VALUE + (int)(1.5*(double)rooks[turn][popLSB(&pieces)])) * perspective;
-        pieces = G_QUEENS(turn);
+        pieces = QUEENS(turn);
         while(pieces) eval += (QUEEN_VALUE + (int)(1.5*(double)queens[turn][popLSB(&pieces)])) * perspective;
-        eval += (int)(2*(double)kings[turn][getLSB(&G_KINGS(turn))]);
+        eval += (int)(2*(double)kings[turn][getLSB(&KINGS(turn))]);
     }
 
-    return (G_TURN == WHITE) ? eval : -eval;
+    return (TURN == WHITE) ? eval : -eval;
 }

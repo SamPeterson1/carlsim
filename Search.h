@@ -14,6 +14,5 @@
 #include "TranspositionTable.h"
 
 uint16_t findBestMove(int depth);
-void s_init();
 
 #endif

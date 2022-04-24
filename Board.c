@@ -1,35 +1,55 @@
 #include "Board.h"
 
 Board g_board;
+int flipped = FALSE;
 
-void printBoard(Board *board) {    
-    printf("\e[1;1H\e[2J");
-    for(int rank = 7; rank >= 0; rank --) {
-        printf("    +---+---+---+---+---+---+---+---+\n");
-        printf("(%d) ", rank+1);
-        for(int file = 0; file < 8; file ++) {
-            printf("| %c ", getPieceChar(board->pieceCodes[rank * 8 + file]));
-        }
-        printf("|\n");
-    }
-    printf("    +---+---+---+---+---+---+---+---+\n");
-    printf("     (a) (b) (c) (d) (e) (f) (g) (h)\n\n");
+void flipView(void) {
+    flipped = 1 - flipped;
 }
 
-unsigned long micros() {
+void printBoard(void) {    
+    printf("\e[1;1H\e[2J");
+    if(flipped) {
+        for(int rank = 0; rank < 8; rank ++) {
+            printf("    +---+---+---+---+---+---+---+---+\n");
+            printf("(%d) ", rank+1);
+            for(int file = 7; file >= 0; file --) {
+                printf("| %c ", getPieceChar(g_board.pieceCodes[rank * 8 + file]));
+            }
+            printf("|\n");
+        }
+        printf("    +---+---+---+---+---+---+---+---+\n");
+        printf("     (h) (g) (f) (e) (d) (c) (b) (a)\n\n");
+    } else {
+        for(int rank = 7; rank >= 0; rank --) {
+            printf("    +---+---+---+---+---+---+---+---+\n");
+            printf("(%d) ", rank+1);
+            for(int file = 0; file < 8; file ++) {
+                printf("| %c ", getPieceChar(g_board.pieceCodes[rank * 8 + file]));
+            }
+            printf("|\n");
+        }
+        printf("    +---+---+---+---+---+---+---+---+\n");
+        printf("     (a) (b) (c) (d) (e) (f) (g) (h)\n\n");
+    }
+    
+    
+}
+
+unsigned long micros(void) {
     struct timeval tv;
     gettimeofday(&tv,NULL);
     return 1000000 * tv.tv_sec + tv.tv_usec;
 }
 
-void printInfo(Board *board) {
-    printf((G_TURN == WHITE) ? "\nWhite to move\n" : "\nBlack to move\n");
-    printf("BlackKCastleRight: %d \n", G_HAS_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT));
-    printf("BlackQCastleRight: %d \n", G_HAS_CASTLE_RIGHT(BLACK_CASTLE_QUEENSIDE_RIGHT));
-    printf("WhiteKCastleRight: %d \n", G_HAS_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT));
-    printf("WhiteQCastleRight: %d \n", G_HAS_CASTLE_RIGHT(WHITE_CASTLE_QUEENSIDE_RIGHT));
-    printf("En Passant File: %d \n", G_EP_FILE);
-    printf("Half Move Clock: %d \n", G_HALFMOVE_COUNTER);
+void printInfo(void) {
+    printf((TURN == WHITE) ? "\nWhite to move\n" : "\nBlack to move\n");
+    printf("BlackKCastleRight: %d \n", HAS_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT));
+    printf("BlackQCastleRight: %d \n", HAS_CASTLE_RIGHT(BLACK_CASTLE_QUEENSIDE_RIGHT));
+    printf("WhiteKCastleRight: %d \n", HAS_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT));
+    printf("WhiteQCastleRight: %d \n", HAS_CASTLE_RIGHT(WHITE_CASTLE_QUEENSIDE_RIGHT));
+    printf("En Passant File: %d \n", EP_FILE);
+    printf("Half Move Clock: %d \n", HALFMOVE_COUNTER);
 }
 
 unsigned char getPieceByte(char pieceChar) {
@@ -87,46 +107,110 @@ char getPieceChar(unsigned char pieceByte) {
     return c;
 }
 
-void clearIndex(Board *board, int index) {
-    unsigned char piece = board->pieceCodes[index];
-    board->bitboard &= ~(1ULL << index);
-    board->pieces[PIECE_TYPE(piece) >> 1][PIECE_COLOR(piece)] &= ~(1ULL << index);
-    board->colorBitboards[PIECE_COLOR(piece)] &= ~(1ULL << index);
+void clearIndex(int index) {
+    unsigned char piece = g_board.pieceCodes[index];
+    g_board.bitboard &= ~(1ULL << index);
+    g_board.pieces[PIECE_TYPE(piece) >> 1][PIECE_COLOR(piece)] &= ~(1ULL << index);
+    g_board.colorBitboards[PIECE_COLOR(piece)] &= ~(1ULL << index);
 
-    if(board->pieceCodes[index] != EMPTY) {
-        board->zobrist ^= g_zPieceSquareKeys[piece][index];
+    if(g_board.pieceCodes[index] != EMPTY) {
+        g_board.zobrist ^= g_zPieceSquareKeys[piece][index];
     }
-    board->pieceCodes[index] = EMPTY;
+    g_board.pieceCodes[index] = EMPTY;
 }
 
-void setIndex(Board *board, int index, unsigned char piece) {
-    clearIndex(board, index);
+void setIndex( int index, unsigned char piece) {
+    clearIndex(index);
     if(piece != EMPTY) {
-        board->bitboard |= (1ULL << index);
-        board->pieces[PIECE_TYPE(piece) >> 1][PIECE_COLOR(piece)] |= (1ULL << index);
-        board->colorBitboards[PIECE_COLOR(piece)] |= (1ULL << index);
-        board->pieceCodes[index] = piece;
-        board->zobrist ^= g_zPieceSquareKeys[piece][index];
+        g_board.bitboard |= (1ULL << index);
+        g_board.pieces[PIECE_TYPE(piece) >> 1][PIECE_COLOR(piece)] |= (1ULL << index);
+        g_board.colorBitboards[PIECE_COLOR(piece)] |= (1ULL << index);
+        g_board.pieceCodes[index] = piece;
+        g_board.zobrist ^= g_zPieceSquareKeys[piece][index];
     }
 }
 
-void loadFENStr(Board *board, char *FENCode) {
+void getFENStr(char *FENCode) {
+    int ptr = 0;
+    for(int rank = 7; rank >= 0; rank --) {
+        int file = 0;
+        while(file < 8) {
+            int skipped = 0;
+            while(file < 8 && g_board.pieceCodes[rank*8 + file] == EMPTY) {
+                skipped ++;
+                file ++;
+            }
+
+            if(skipped != 0) FENCode[ptr++] = skipped + 48;
+            unsigned char piece = g_board.pieceCodes[rank*8 + file];
+            if(file < 8 && piece != EMPTY) {
+                FENCode[ptr++] = getPieceChar(piece);
+            }
+            file ++;
+        }
+        if(rank != 0) FENCode[ptr++] = '/';
+    }
+    FENCode[ptr ++] = ' ';
+
+    if(TURN == WHITE) FENCode[ptr++] = 'w';
+    else FENCode[ptr++] = 'b';
+    FENCode[ptr ++] = ' ';
+
+    int start = ptr;
+    if(HAS_CASTLE_RIGHT(WHITE_CASTLE_KINGSIDE_RIGHT)) FENCode[ptr++] = 'K';
+    if(HAS_CASTLE_RIGHT(WHITE_CASTLE_QUEENSIDE_RIGHT)) FENCode[ptr++] = 'Q';
+    if(HAS_CASTLE_RIGHT(BLACK_CASTLE_KINGSIDE_RIGHT)) FENCode[ptr++] = 'k';
+    if(HAS_CASTLE_RIGHT(BLACK_CASTLE_QUEENSIDE_RIGHT)) FENCode[ptr++] = 'q';
+    if(start == ptr) FENCode[ptr++] = '-';
+    FENCode[ptr ++] = ' ';
+
+    int epFile = EP_FILE;
+    if(epFile != -1) {
+        FENCode[ptr++] = epFile + 97;
+        FENCode[ptr++] = (TURN == WHITE) ? '3' : '6';
+    } else {
+        FENCode[ptr++] = '-';
+    }
+    FENCode[ptr ++] = ' ';
+
+    int halfMoveCounter = HALFMOVE_COUNTER;
+    int placeVal = 1;
+    char buff[5];
+    int buffLen = 0;
+
+    while(halfMoveCounter) {
+        int digit = (halfMoveCounter / placeVal) % 10;
+        halfMoveCounter -= digit * placeVal;
+        placeVal *= 10;
+        buff[buffLen++] = digit + 48;
+    }
+
+    for(int i = buffLen-1; i >= 0; i --) {
+        FENCode[ptr++] = buff[i];
+    }
+
+    FENCode[ptr++] = ' ';
+    FENCode[ptr++] = '0';
+    FENCode[ptr] = '\0';
+}
+
+void loadFENStr(char *FENCode) {
     int rank = 7;
     int file = 0;
     for(int i = 0; i < 64; i ++) {
-        board->pieceCodes[i] = EMPTY;
+        g_board.pieceCodes[i] = EMPTY;
     }
     for(int i = 0; i < 6; i ++) {
-        board->pieces[i][0] = 0;
-        board->pieces[i][1] = 0;
+        g_board.pieces[i][0] = 0;
+        g_board.pieces[i][1] = 0;
     }
     
     int i = 0;
     
-    board->gameState = 0;
-    board->bitboard = 0;
-    board->colorBitboards[0] = 0;
-    board->colorBitboards[1] = 0;
+    g_board.gameState = 0;
+    g_board.bitboard = 0;
+    g_board.colorBitboards[0] = 0;
+    g_board.colorBitboards[1] = 0;
 
     while(FENCode[i] != ' ') {
         if(FENCode[i] == '/') {
@@ -134,7 +218,7 @@ void loadFENStr(Board *board, char *FENCode) {
             file = 0;
         } else if(FENCode[i] > 64) {
             unsigned char pieceByte = getPieceByte(FENCode[i]);
-            setIndex(board, rank * 8 + file, pieceByte);
+            setIndex(rank * 8 + file, pieceByte);
             file ++;
         } else {
             file += FENCode[i] - 48;
@@ -142,24 +226,27 @@ void loadFENStr(Board *board, char *FENCode) {
         i++;
     }
     i++;
-    i += 2;
+
+    if(FENCode[i] == 'w') SET_TURN(WHITE);
+    else SET_TURN(BLACK);
+    i+= 2;
 
     while(FENCode[i] != ' ') {
         if(FENCode[i] == 'Q') {
-            board->gameState |= WHITE_CASTLE_QUEENSIDE_RIGHT;
+            g_board.gameState |= WHITE_CASTLE_QUEENSIDE_RIGHT;
         } else if(FENCode[i] == 'q') {
-            board->gameState |= BLACK_CASTLE_QUEENSIDE_RIGHT;
+            g_board.gameState |= BLACK_CASTLE_QUEENSIDE_RIGHT;
         } else if(FENCode[i] == 'K') {
-            board->gameState |= WHITE_CASTLE_KINGSIDE_RIGHT;
+            g_board.gameState |= WHITE_CASTLE_KINGSIDE_RIGHT;
         } else if(FENCode[i] == 'k') {
-            board->gameState |= BLACK_CASTLE_KINGSIDE_RIGHT;
+            g_board.gameState |= BLACK_CASTLE_KINGSIDE_RIGHT;
         }
         i++;
     }
     i++;
 
     if(FENCode[i] != '-') {
-        G_SET_EP_FILE(FENCode[i] - 97);
+        SET_EP_FILE(FENCode[i] - 97);
         i++;
     }
     i+= 2;
@@ -170,9 +257,8 @@ void loadFENStr(Board *board, char *FENCode) {
     }
     char halfMovesChar[len];
     memcpy(halfMovesChar, &FENCode[i-len], len);
-    board->gameState |= atoi(halfMovesChar) << 8;
-
-    z_getKey(board, &board->zobrist);
+    SET_HALFMOVE_COUNTER(atoi(halfMovesChar));
+    z_getKey(&g_board.zobrist);
 }
 
 int getFile(char file) {

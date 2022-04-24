@@ -5,11 +5,11 @@ ZobristKey g_zBlackToMoveKey;
 ZobristKey g_zCastleKeys[16];
 ZobristKey g_zEpFileKeys[8];
 
-ZobristKey lrand() {
+ZobristKey lrand(void) {
     return ((ZobristKey) rand() << 32ULL) | ((ZobristKey) rand());
 }
 
-void z_init() {
+void z_init(void) {
     for(int piece = 0; piece < 12; piece ++) {
         for(int square = 0; square < 64; square ++) {
             g_zPieceSquareKeys[piece][square] = lrand();
@@ -27,15 +27,15 @@ void z_init() {
     }
 }
 
-void z_getKey(Board *board_p, ZobristKey *key) {
+void z_getKey(ZobristKey *key) {
     *key = 0;
 
     for(int square = 0; square < 64; square ++) {
-        if(board_p->pieceCodes[square] != EMPTY)
-            *key ^= g_zPieceSquareKeys[board_p->pieceCodes[square]][square];
+        if(g_board.pieceCodes[square] != EMPTY)
+            *key ^= g_zPieceSquareKeys[g_board.pieceCodes[square]][square];
     }
 
-    z_hashGameState(board_p->gameState, key);
+    z_hashGameState(g_board.gameState, key);
 }
 
 void z_hashGameState(uint16_t gameState, ZobristKey *key) {

@@ -12,8 +12,9 @@ typedef struct Board_s {
     // Bits 0-3 store white and black kingside/queenside castling legality
     // Bits 4-7 file of ep square (starting at 1, so 0 = no ep square)
     // Bit 8 is turn
-    // Bits 8-... half move counter
+    // Bits 9-15 is halfmove counter
     uint16_t gameState;
+
     uint64_t pieces[6][2];
     uint64_t bitboard;
     uint64_t colorBitboards[2];

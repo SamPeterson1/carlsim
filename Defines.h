@@ -83,17 +83,11 @@
 #define MOVE_ROOK_PROMOTION 0xA000
 #define MOVE_QUEEN_PROMOTION 0xB000
 
-#define move_origin(move) (move & 0x3F)
-#define move_dest(move) ((move & 0xFC0) >> 6)
-#define move_isCapture(move) ((move >> 14) & 1)
-#define move_isPromotion(move) ((move >> 15) & 1)
-#define move_getSpecial(move) (move & 0xF000)
-
-#define move_setOrigin(move, origin) move |= origin
-#define move_setDest(move, dest) move |= (dest << 6)
-#define move_setCapture(move, capture) move |= (capture << 13)
-#define move_setPromotion(move, promotion) move |= (promotion << 14)d
-#define move_setSpecial(move, special) move |= special
+#define MOVE_ORIGIN(move) (move & 0x3F)
+#define MOVE_DEST(move) ((move & 0xFC0) >> 6)
+#define MOVE_IS_CAPTURE(move) ((move >> 14) & 1)
+#define MOVE_IS_PROMOTION(move) ((move >> 15) & 1)
+#define MOVE_GET_SPECIAL(move) (move & 0xF000)
 
 #define create_move(origin, dest, special) ((origin) | ((dest) << 6) | (special))
 
@@ -102,35 +96,23 @@
 #define PIECE_TYPE(piece) (piece & 0xE)
 #define PIECE_COLOR(piece) (piece & 1)
 
-#define G_TURN ((g_board.gameState >> 8) & 1)
-#define G_OPP_TURN (1 - TURN)
-#define G_HAS_CASTLE_RIGHT(castle) ((g_board.gameState & castle) == castle)
-#define G_EP_FILE (((g_board.gameState >> 4) & 0x0F) - 1)
-#define G_HALFMOVE_COUNTER (g_board.gameState >> 8)
-#define G_SET_EP_FILE(EPFile) g_board.gameState = ((g_board.gameState & 0xFF0F) | (((EPFile) + 1) << 4))
-#define G_REMOVE_CASTLE_RIGHT(castle) g_board.gameState &= ~(castle)
-#define G_GIVE_CASTLE_RIGHT(castle) g_board.gameState |= castle
-#define G_PAWNS(turn) g_board.pieces[0][turn]
-#define G_KNIGHTS(turn) g_board.pieces[1][turn]
-#define G_BISHOPS(turn) g_board.pieces[2][turn]
-#define G_ROOKS(turn) g_board.pieces[3][turn]
-#define G_QUEENS(turn) g_board.pieces[4][turn]
-#define G_KINGS(turn) g_board.pieces[5][turn]
-
-#define TURN(board) (((board).gameState >> 8) & 1)
-#define OPP_TURN(board) (1 - TURN)
-#define HAS_CASTLE_RIGHT(board, castle) (((board).gameState & castle) == castle)
-#define EP_FILE(board) ((((board).gameState >> 4) & 0x0F) - 1)
-#define HALFMOVE_COUNTER(board) ((board).gameState >> 8)
-#define SET_EP_FILE(board, EPFile) (board).gameState = (((board).gameState & 0xFF0F) | (((EPFile) + 1) << 4))
-#define REMOVE_CASTLE_RIGHT(board, castle) (board).gameState &= ~(castle)
-#define GIVE_CASTLE_RIGHT(board, castle) (board).gameState |= castle
-#define PAWNS(board, turn) (board).pieces[0][turn]
-#define KNIGHTS(board, turn) (board).pieces[1][turn]
-#define BISHOPS(board, turn) (board).pieces[2][turn]
-#define ROOKS(board, turn) (board).pieces[3][turn]
-#define QUEENS(board, turn) (board).pieces[4][turn]
-#define KINGS(board, turn) (board).pieces[5][turn]
+#define TURN ((g_board.gameState >> 8) & 1)
+#define SET_TURN(turn) g_board.gameState = ((g_board.gameState & 0xFEFF) | (turn << 8))
+#define OPP_TURN (1 - TURN)
+#define HAS_CASTLE_RIGHT(castle) ((g_board.gameState & castle) == castle)
+#define EP_FILE (((g_board.gameState >> 4) & 0x0F) - 1)
+#define HALFMOVE_COUNTER (g_board.gameState >> 9)
+#define SET_HALFMOVE_COUNTER(counter) (g_board.gameState = (g_board.gameState & 0x1FF) | ((counter) << 9))
+#define SET_EP_FILE(EPFile) g_board.gameState = ((g_board.gameState & 0xFF0F) | (((EPFile) + 1) << 4))
+#define REMOVE_CASTLE_RIGHT(castle) g_board.gameState &= ~(castle)
+#define GIVE_CASTLE_RIGHT(castle) g_board.gameState |= castle
+#define CHANGE_TURN() (g_board.gameState ^= 256)
+#define PAWNS(turn) g_board.pieces[0][turn]
+#define KNIGHTS(turn) g_board.pieces[1][turn]
+#define BISHOPS(turn) g_board.pieces[2][turn]
+#define ROOKS(turn) g_board.pieces[3][turn]
+#define QUEENS(turn) g_board.pieces[4][turn]
+#define KINGS(turn) g_board.pieces[5][turn]
 
 #define MAX_ARG_COUNT 64
 #define MAX_ARG_LENGTH 256

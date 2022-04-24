@@ -10,14 +10,13 @@
 #define MOVEGEN_H
 
 
-void initMoveGenerator();
+void initMoveGenerator(void);
 
 int inCheck(int turn);
 int generatePseudoLegalMoves(uint16_t *moves, int genType);
-int generateLegalMoves(Board *board, uint16_t *moves, int genType);
-void updateMateStatus();
+int generateLegalMoves(uint16_t *moves, int genType);
+void updateMateStatus(void);
 void printBitboard(uint64_t *bitboard);
-void test();
 void perft(int depth);
 
 extern uint64_t pawnAttacks[64][2];

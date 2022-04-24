@@ -1,6 +1,6 @@
 #include "StrUtil.h"
 
-char **initBuffer()
+char **initBuffer(void)
 {
 
     char **ret;

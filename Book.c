@@ -141,7 +141,7 @@ void bk_parsePGN(char *path) {
     int gameEnded = FALSE;
     while(1) {
         //printf("\n\n\n\n");
-        loadFENStr(&g_board, STARTING_FEN);
+        loadFENStr(STARTING_FEN);
         while(1) {
             int state = readPly(pgn, whiteMoveStr, blackMoveStr);
             if(state == -1) {
@@ -157,24 +157,24 @@ void bk_parsePGN(char *path) {
 
             //printf("%s %s\n", whiteMoveStr, blackMoveStr);
             uint16_t move = 0;
-            if(whiteMoveStr[0] != '\0') move = parseAlgebraicMove(&g_board, whiteMoveStr);
+            if(whiteMoveStr[0] != '\0') move = parseAlgebraicMove(whiteMoveStr);
             if(move != 0) {
                 char bookLine[64];
                 if(getMoveFromBook(&g_board.zobrist, book) == 0) {
                     getBookLine(&g_board.zobrist, move, bookLine);
                     if(fputs(bookLine, book) == EOF) printf("Err\n");
                 }
-                makeMove(&g_board, move);
+                makeMove(move);
             }
             move = 0;
-            if(blackMoveStr[0] != '\0')  move = parseAlgebraicMove(&g_board, blackMoveStr);
+            if(blackMoveStr[0] != '\0')  move = parseAlgebraicMove(blackMoveStr);
             if(move != 0) {
                 char bookLine[64];
                 if(getMoveFromBook(&g_board.zobrist, book) == 0) {
                     getBookLine(&g_board.zobrist, move, bookLine);
                     if(fputs(bookLine, book) == EOF) printf("Err\n");
                 }
-                makeMove(&g_board, move);
+                makeMove(move);
             }
             //printBoard(&g_board);
         }
