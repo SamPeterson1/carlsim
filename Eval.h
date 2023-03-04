@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include "Board.h"
+#include "Log.h"
 #include "TranspositionTable.h"
 #define EVAL_H
 

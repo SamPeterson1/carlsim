@@ -45,4 +45,10 @@ typedef struct TTEntry_s {
     int type;
 } TTEntry;
 
+typedef struct KeyValuePair_s
+{
+    char key[32];
+    char value[32];
+} KeyValuePair;
+
 #endif

@@ -4,11 +4,7 @@ uint16_t lastMove;
 uint16_t lastGameState;
 unsigned char lastCapture;
 
-int cmd_execute(char *input) {
-    char **args = initBuffer();
-    int argc;
-    parse(input, args, &argc);
-
+int cmd_execute(char **args, int argc) {
     if(strcmp(args[0], "quit") == 0) {
         return TRUE;
     }

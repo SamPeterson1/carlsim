@@ -4,6 +4,7 @@
 
 #include "Defines.h"
 #include "Types.h"
+#include "Log.h"
 
 #include <stdint.h>
 #include <stdlib.h>

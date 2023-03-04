@@ -375,13 +375,15 @@ void perft(int depth) {
     printf("Average move generation time: %f moves/sec\n", (double)movesGenerated/totalTime*1.0E6);
 }
 
-void updateMateStatus(void) {
+int updateMateStatus(void) {
     int numMoves = generateLegalMoves(movesBuffer, GEN_ALL);
     g_board.mateStatus = NO_MATE;
     if(numMoves == 0) {
         if(numCheckers == 0) g_board.mateStatus = STALE_MATE;
         else g_board.mateStatus = CHECK_MATE;
     }
+
+    return numMoves;
 }
 
 int inCheck(int turn) {

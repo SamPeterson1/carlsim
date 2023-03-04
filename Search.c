@@ -132,6 +132,8 @@ uint16_t findBestMove(int depth) {
     if(bookMove != 0) {
         printf("Found position in book");
         return bookMove;
+    } else {
+        printf("Starting search.");
     }
 
     unsigned long starttime = micros();

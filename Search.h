@@ -12,6 +12,7 @@
 #include "Moves.h"
 #include "Book.h"
 #include "TranspositionTable.h"
+#include "Log.h"
 
 uint16_t findBestMove(int depth);
 

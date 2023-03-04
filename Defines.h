@@ -126,4 +126,14 @@
 
 #define MOVE_INVALID 0
 
+#define KEY_SIZE 32
+#define VALUE_SIZE 32
+#define MAX_QUERY_LENGTH 64
+#define MAX_KEYVALUE_PAIRS 16
+#define RETURN_FAILURE 0
+#define RETURN_SUCCESS 1
+
+#define SESSION_ID_SIZE 16
+#define MAX_COMMAND_ARGS 4
+
 #endif

@@ -34,7 +34,7 @@ uint16_t getMoveFromBook(ZobristKey *key, FILE *book) {
                 if(c == '\n') {
                     moveStr[i++] = '\0';
                     break;
-                }
+                }                    
                 moveStr[i++] = c;
             }
         }
@@ -43,7 +43,7 @@ uint16_t getMoveFromBook(ZobristKey *key, FILE *book) {
         getInt(&bookKey, keyStr);
         if(bookKey == *key) {
             uint64_t move = 0;
-            getInt(&move, moveStr);
+            getInt(&move, moveStr);              
             return (uint16_t) move;
         }
     }
@@ -51,7 +51,9 @@ uint16_t getMoveFromBook(ZobristKey *key, FILE *book) {
 }
 
 uint16_t bk_getMove(ZobristKey *key) {
-    FILE *book = fopen("/home/sam/GitHub/Carlsim/Book/Book.txt", "r");
+    FILE *book = fopen("Book/Book.txt", "r");
+    printf("Opened book\n");
+    printf("Key: %ld\n", *key);
     uint16_t move = getMoveFromBook(key, book);
     fclose(book);
     return move;
@@ -127,9 +129,8 @@ void getBookLine(ZobristKey *key, uint16_t move, char *line) {
 }
 
 void bk_parsePGN(char *path) {
-    FILE *book = fopen("/home/sam/GitHub/Carlsim/Book/Book.txt", "r+");
+    FILE *book = fopen("Book/Book.txt", "r+");
     FILE *pgn = fopen(path, "r");
-
     while(1) {
         char c;
         while((c = fgetc(pgn)) != '\n');
@@ -140,7 +141,6 @@ void bk_parsePGN(char *path) {
     char blackMoveStr[16];
     int gameEnded = FALSE;
     while(1) {
-        //printf("\n\n\n\n");
         loadFENStr(STARTING_FEN);
         while(1) {
             int state = readPly(pgn, whiteMoveStr, blackMoveStr);
@@ -155,7 +155,6 @@ void bk_parsePGN(char *path) {
                 break;
             }  
 
-            //printf("%s %s\n", whiteMoveStr, blackMoveStr);
             uint16_t move = 0;
             if(whiteMoveStr[0] != '\0') move = parseAlgebraicMove(whiteMoveStr);
             if(move != 0) {
@@ -166,6 +165,17 @@ void bk_parsePGN(char *path) {
                 }
                 makeMove(move);
             }
+            z_getKey(&g_board.zobrist);
+            ZobristKey check = 0;
+            for(int i = 0; i < 12; i ++) {
+                for(int j = 0; j < 64; j ++) {
+                    check ^= g_zPieceSquareKeys[i][j];
+                }
+            }
+            for(int i = 0; i < 16; i ++) check ^= g_zCastleKeys[i];
+            for(int i = 0; i < 8; i ++) check ^= g_zEpFileKeys[i];
+            check ^= g_zBlackToMoveKey;
+            
             move = 0;
             if(blackMoveStr[0] != '\0')  move = parseAlgebraicMove(blackMoveStr);
             if(move != 0) {
@@ -176,7 +186,16 @@ void bk_parsePGN(char *path) {
                 }
                 makeMove(move);
             }
-            //printBoard(&g_board);
+            z_getKey(&g_board.zobrist);
+            check = 0;
+            for(int i = 0; i < 12; i ++) {
+                for(int j = 0; j < 64; j ++) {
+                    check ^= g_zPieceSquareKeys[i][j];
+                }
+            }
+            for(int i = 0; i < 16; i ++) check ^= g_zCastleKeys[i];
+            for(int i = 0; i < 8; i ++) check ^= g_zEpFileKeys[i];
+            check ^= g_zBlackToMoveKey;
         }
 
         int iters = 0;

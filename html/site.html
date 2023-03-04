@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+    <canvas id="board" width="1000" height="1000"></canvas>
+    <script src="jquery-3.6.0.min.js"></script>
+    <script>
+        var c = document.getElementById("board");
+        var ctx = c.getContext("2d");
+        
+        c.addEventListener("mousedown", function(e) {onBoardMouseDown(e);});
+        c.addEventListener("mouseup", function(e) {onBoardMouseUp(e);});
+        c.addEventListener("mousemove", function(e) {onBoardMouseMove(e);});
+
+        const WHITE = 0; const BLACK = 1;
+        const P = 0; const p = 1;
+        const N = 2; const n = 3;
+        const B = 4; const b = 5;
+        const R = 6; const r = 7;
+        const Q = 8; const q = 9;
+        const K = 10; const k = 11;
+        const none = 255;
+
+        const colors = ["#945100", "#d4c9bc"];
+        const pieceNames = ["WhitePawn", "BlackPawn", "WhiteKnight", "BlackKnight", "WhiteBishop", "BlackBishop", "WhiteRook", "BlackRook", "WhiteQueen", "BlackQueen", "WhiteKing", "BlackKing"];
+        const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+
+        var pieces = [];
+
+        for(let i = 0; i < 12; i ++) {
+            pieces[i] = new Image();
+            pieces[i].src = "Assets/" + pieceNames[i] + ".png";
+        }
+
+        var turn = WHITE;
+        var blackQueensideCastle = true;
+        var blackKingsideCastle = true;
+        var whiteQueensideCastle = true;
+        var whiteKingsideCastle = true;
+        var epFile = -1;
+        var halfMoveCounter = 0;
+        var board = new Array(64);
+        var sessionID = null;
+
+        var movesBySquare = null;
+        var selectedPieceIndex = null;
+        var dragging = false;
+        var mouseDownX = null;
+        var mouseDownY = null;
+        var mouseX = null;
+        var mouseY = null;
+
+        var waiting = false;
+
+        var HttpClient = function() {
+            this.get = function(aUrl, aCallback) {
+                var anHttpRequest = new XMLHttpRequest();
+                anHttpRequest.onreadystatechange = function() { 
+                    if (anHttpRequest.readyState == 4 && anHttpRequest.status == 200)
+                        aCallback(anHttpRequest.responseText);
+                }
+
+                anHttpRequest.open( "GET", aUrl, true );            
+                anHttpRequest.send( null );
+            }
+        }
+
+        var client = new HttpClient();
+
+        for(let i = 0; i < 64; i ++) board[i] = none;
+
+        ctx.font = "20px Arial";
+
+        $.getJSON("http://localhost/cgi-bin/carlsim?command=newgame", function(json) {
+            console.log("success");
+            console.log(json);
+            sessionID = json.session;
+            movesBySquare = json.moves;
+            loadFEN(json.fen);
+            draw();
+        });  
+
+        function setIndex(index, pieceChar) {
+            switch(pieceChar) {
+                case 'P':
+                    board[index] = P;
+                    break;
+                case 'N':
+                    board[index] = N;
+                    break;
+                case 'B':
+                    board[index] = B;
+                    break; 
+                case 'R':
+                    board[index] = R;
+                    break; 
+                case 'Q':
+                    board[index] = Q;
+                    break; 
+                case 'K':
+                    board[index] = K;
+                    break; 
+                case 'p':
+                    board[index] = p;
+                    break; 
+                case 'n':
+                    board[index] = n;
+                    break; 
+                case 'b':
+                    board[index] = b;
+                    break; 
+                case 'r':
+                    board[index] = r;
+                    break; 
+                case 'q':
+                    board[index] = q;
+                    break; 
+                case 'k':
+                    board[index] = k;
+                    break; 
+            }
+        }
+
+        function loadFEN(fen) {
+            let rank = 7;
+            let file = 0;
+            let i = 0;
+            for(i = 0; i < 64; i ++) {
+                board[i] = none;
+            }
+
+            i = 0;
+            while(fen.charAt(i) != ' ') {
+                if(fen.charAt(i) == '/') {
+                    rank --;
+                    file = 0;
+                } else if(fen.charCodeAt(i) > 64) {
+                    setIndex(rank * 8 + file, fen.charAt(i));
+                    file ++;
+                } else {
+                    file += parseInt(fen.charAt(i));
+                }
+                i++;
+            }
+            i++;
+
+            if(fen.charAt(i) == 'w') turn = WHITE;
+            else turn = BLACK;
+            i+= 2;
+
+            whiteQueensideCastle = false;
+            whiteKingsideCastle = false;
+            blackQueensideCastle = false;
+            blackKingsideCastle = false;
+
+            while(fen.charAt(i) != ' ') {
+                if(fen.charAt(i) == 'Q') {
+                    whiteQueensideCastle = true;
+                } else if(fen.charAt(i) == 'q') {
+                    blackQueensideCastle = true;
+                } else if(fen.charAt(i) == 'K') {
+                    whiteKingsideCastle = true;
+                } else if(fen.charAt(i) == 'k') {
+                    blackKingsideCastle = true;
+                }
+                i++;
+            }
+            i++;
+
+            if(fen.charAt(i) != '-') {
+                epFile = String.fromCharCode(fen.charCodeAt(i) - 97);
+                i++;
+            }
+            i+= 2;
+
+            var halfMoveStr = "";
+            while(fen.charAt(i) != ' ') {
+                halfMoveStr += fen.charAt(i);
+                i ++;
+            }
+            halfMoveCounter = parseInt(halfMoveStr);
+        }  
+
+        function getSquareString(square) {
+            console.log("Square: " + square);
+            let rank = Math.floor(square / 8) + 1;
+            let file = square % 8;
+            return String.fromCharCode(file + 97) + rank;
+        }
+
+        function getSANMoveString(origin, dest) {
+            let prefix = "";
+            
+            if(board[dest] != none && (board[origin] == P || board[origin] == p)) {
+                return String.fromCharCode((origin % 8) + 97) + "x" + getSquareString(dest);
+            }
+
+            if(board[origin] == K || board[origin] == k) {
+                if(origin-dest == -2) return "O-O";
+                if(origin-dest == 2) return "O-O-O";
+                prefix = "K";
+            } else if(board[origin] == N || board[origin] == n) {
+                prefix = "N";
+            } else if(board[origin] == B || board[origin] == b) {
+                prefix = "B";
+            } else if(board[origin] == R || board[origin] == r) {
+                prefix = "R";
+            } else if(board[origin] == Q || board[origin] == q) {
+                prefix = "Q";
+            }
+
+            if(board[dest] == none) return prefix + getSquareString(dest);
+            return prefix + "x" + getSquareString(dest);
+        }
+
+        function draw() {
+
+            for(let rank = 0; rank < 8; rank ++) {
+                for(let file = 0; file < 8; file ++) {
+                    ctx.fillStyle = colors[(rank + file) % 2];
+                    ctx.fillRect(file*100, 700 - rank*100, 100, 100);
+
+                    let piece = board[rank*8 + file];
+                    if(piece != none) {
+                        if(!((rank*8+file) == selectedPieceIndex && dragging)) {
+                            ctx.drawImage(pieces[board[rank*8 + file]], file*100, 700 - rank*100);
+                        }
+                    }  
+                    
+                    if(rank == 7) {
+                        ctx.fillText(files[file], file*100+87, 794);
+                    }
+                    if(file == 0) {
+                        ctx.fillStyle = colors[(rank + file + 1) % 2];
+                        ctx.fillText(rank + 1, 3, 700-rank*100+20);
+                    }
+                }
+            }
+
+            ctx.fillStyle = "#61ff00";
+            if(movesBySquare != null && selectedPieceIndex != null) {
+                let moves = movesBySquare["" + selectedPieceIndex];
+                for(let i = 0; i < moves.length; i ++) {
+                    let file = moves[i] % 8;
+                    let rank = Math.floor(moves[i] / 8);
+                    ctx.fillRect(45 + file*100, 745 - rank*100, 10, 10);
+                }
+            }
+
+            if(dragging) {
+                ctx.drawImage(pieces[board[selectedPieceIndex]], mouseX - 50, mouseY - 50);
+            }
+        }
+
+        function updateMousePos(event) {
+            let rect = c.getBoundingClientRect();
+            mouseX = event.clientX - rect.left;
+            mouseY = event.clientY - rect.top;
+        }
+
+        function onBoardMouseDown(event) {
+            aiMove();
+            if(!waiting) {
+                console.log("down");
+                updateMousePos(event);
+                mouseDownX = mouseX;
+                mouseDownY = mouseY;
+
+                let rank = 7 - Math.floor(mouseY / 100);
+                let file = Math.floor(mouseX / 100);    
+                selectedPieceIndex = rank * 8 + file;
+                
+                if(board[selectedPieceIndex] == none) {            
+                    selectedPieceIndex = null;
+                    dragging = false;
+                } else {
+                    dragging = true;
+                }
+                console.log("Index: " + selectedPieceIndex);
+                draw();
+            }
+        }
+
+        function onBoardMouseUp(event) {
+            if(!waiting) {
+                let dx = mouseX - mouseDownX;
+                let dy = mouseY - mouseDownY;
+                let rank = 7 - Math.floor(mouseY / 100);
+                let file = Math.floor(mouseX / 100);    
+                let index = rank * 8 + file;
+                if(dx*dx + dy*dy > 25 && isLegalMove(selectedPieceIndex, index)) {
+                    makeMove(getSANMoveString(selectedPieceIndex, index));
+                    board[index] = board[selectedPieceIndex];
+                    board[selectedPieceIndex] = none;
+                    selectedPieceIndex = null;
+                } else {
+                    selectedPieceIndex = index;
+                }
+                dragging = false;
+                draw();
+            }
+        }
+
+        function isLegalMove(origin, dest) {
+            let moves = movesBySquare["" + origin];
+            for(let i = 0; i < moves.length; i ++) {
+                if(moves[i] == dest) return true;
+            }
+            return false;
+        }
+
+        function onBoardMouseMove(event) {
+            if(!waiting) {
+                updateMousePos(event);
+                draw();
+            }
+        }
+        
+        function aiMove() {
+            $.getJSON("http://localhost/cgi-bin/carlsim?command=ai&session=" + sessionID + "&arg1=7", function(json) {
+                console.log(json);
+                waiting = false;
+                movesBySquare = json.moves;
+                loadFEN(json.fen);
+                draw();
+            });
+        }
+
+        function makeMove(move) {
+            console.log(move);
+            waiting = true;
+            $.getJSON("http://localhost/cgi-bin/carlsim?command=move&session=" + sessionID + "&arg1=" + move, function(json) {
+                console.log(json);
+                waiting = false;
+                movesBySquare = json.moves;
+                loadFEN(json.fen);
+                draw();
+            });
+        }
+    </script> 
+</html>

@@ -4,6 +4,7 @@
 
 #include "Defines.h"
 #include "Types.h"
+#include "Log.h"
 
 uint16_t tt_getMove(ZobristKey *key);
 int tt_getEval(ZobristKey *key, int alpha, int beta, int depth);

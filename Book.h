@@ -5,6 +5,7 @@
 #include "Types.h"
 #include "Defines.h"
 #include "Moves.h"
+#include "Log.h"
 
 #include <stdlib.h>
 #include <stdio.h>

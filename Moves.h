@@ -4,6 +4,7 @@
 
 #include "Defines.h"
 #include "Types.h"
+#include "Log.h"
 
 #include <stdlib.h>
 #include "Board.h"

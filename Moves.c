@@ -171,8 +171,16 @@ uint16_t parseAlgebraicMove(char *str) {
         }
 
     }
+    
+    uint16_t parsedMove = create_move(origin, dest, special);
 
-    return create_move(origin, dest, special);
+    for(int i = 0; i < numMoves; i ++) {
+        if(compareMoves(moves[i], parsedMove)) {
+            return moves[i];
+        }
+    }
+
+    return MOVE_INVALID;
 }
 
 uint16_t parseMove(char *str) {
@@ -209,10 +217,21 @@ uint16_t parseMove(char *str) {
         special = MOVE_EP_CAPTURE;
     }
 
-    return create_move(origin, dest, special);
+    uint16_t legal[256];
+    int numMoves = generateLegalMoves(legal, GEN_ALL);
+    uint16_t parsedMove = create_move(origin, dest, special);
+
+    for(int i = 0; i < numMoves; i ++) {
+        if(compareMoves(legal[i], parsedMove)) {
+            return legal[i];
+        }
+    }
+
+    return MOVE_INVALID;
 }
 
 unsigned char makeMove(uint16_t move) {
+    if(move == MOVE_INVALID) return EMPTY;
     int special = MOVE_GET_SPECIAL(move);
     int origin =  MOVE_ORIGIN(move);
     int dest =  MOVE_DEST(move);
@@ -221,7 +240,7 @@ unsigned char makeMove(uint16_t move) {
     int newEpFile = -1;
     unsigned char lastCapture = g_board.pieceCodes[dest];
 
-    z_hashGameState(g_board.gameState, &g_board.zobrist);
+    z_hashGameState(&g_board.zobrist);
 
     if(special == MOVE_KINGSIDE_CASTLE) {
         if(turn == WHITE) {
@@ -285,7 +304,7 @@ unsigned char makeMove(uint16_t move) {
     
     SET_EP_FILE(newEpFile);
     g_board.gameState ^= 256;
-    z_hashGameState(g_board.gameState, &g_board.zobrist);
+    z_hashGameState(&g_board.zobrist);
 
     if(lastCapture == EMPTY) {
         SET_HALFMOVE_COUNTER(HALFMOVE_COUNTER + 1);
@@ -297,13 +316,14 @@ unsigned char makeMove(uint16_t move) {
 }
 
 void unMakeMove(uint16_t move, unsigned char lastCapture, uint16_t lastGameState) {
+    if(move == MOVE_INVALID) return;
     g_board.gameState = lastGameState;
 
     int special = MOVE_GET_SPECIAL(move);
     int origin =  MOVE_ORIGIN(move);
     int dest =  MOVE_DEST(move);
     int turn = TURN;
-    z_hashGameState(g_board.gameState, &g_board.zobrist);
+    z_hashGameState(&g_board.zobrist);
 
     if(special == MOVE_KINGSIDE_CASTLE) {
         if(turn == WHITE) {
@@ -335,5 +355,5 @@ void unMakeMove(uint16_t move, unsigned char lastCapture, uint16_t lastGameState
         setIndex(dest, lastCapture);
     }
 
-    z_hashGameState(g_board.gameState, &g_board.zobrist);
+    z_hashGameState(&g_board.zobrist);
 }

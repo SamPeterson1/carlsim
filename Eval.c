@@ -204,7 +204,7 @@ int evalMove(uint16_t move) {
 
 int evaluate(void) {
     
-    updateMateStatus();
+    int numMoves = updateMateStatus();
     if(g_board.mateStatus == STALE_MATE) return 0;
     else if(g_board.mateStatus == CHECK_MATE) return (TURN == WHITE) ? -EVAL_INF : EVAL_INF;   
 

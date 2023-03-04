@@ -14,6 +14,7 @@
 
 #include "MoveGenerator.h"
 #include "Zobrist.h"
+#include "Log.h"
 
 extern Board g_board;
 

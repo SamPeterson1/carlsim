@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
 
-gcc -g3 -O3 -Wall -o carlsim Main.c Board.c Commands.c StrUtil.c MoveGenerator.c MagicHashTable.c Moves.c Search.c Eval.c Zobrist.c Book.c TranspositionTable.c -lm
+gcc -g3 -O3 -Wall -o carlsim Main.c Board.c Commands.c StrUtil.c MoveGenerator.c MagicHashTable.c Moves.c Search.c Eval.c Zobrist.c Book.c TranspositionTable.c CGI.c Log.c -lm
+
+sudo cp carlsim /usr/lib/cgi-bin/carlsim
+

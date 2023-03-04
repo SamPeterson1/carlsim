@@ -6,7 +6,7 @@ ZobristKey g_zCastleKeys[16];
 ZobristKey g_zEpFileKeys[8];
 
 ZobristKey lrand(void) {
-    return ((ZobristKey) rand() << 32ULL) | ((ZobristKey) rand());
+    return (((ZobristKey) rand()) >> 32ULL) | ((ZobristKey) rand());
 }
 
 void z_init(void) {
@@ -31,19 +31,20 @@ void z_getKey(ZobristKey *key) {
     *key = 0;
 
     for(int square = 0; square < 64; square ++) {
-        if(g_board.pieceCodes[square] != EMPTY)
+        if(g_board.pieceCodes[square] != EMPTY) {
             *key ^= g_zPieceSquareKeys[g_board.pieceCodes[square]][square];
+        }
     }
 
-    z_hashGameState(g_board.gameState, key);
+    z_hashGameState(key);
 }
 
-void z_hashGameState(uint16_t gameState, ZobristKey *key) {
-    int epFile = ((gameState >> 4) & 0x0F) - 1;
+void z_hashGameState(ZobristKey *key) {
+    int epFile = EP_FILE;
     if(epFile != -1) *key ^= g_zEpFileKeys[epFile];
 
-    int castleRights = (gameState & 0xF);
+    int castleRights = (g_board.gameState & 0xF);
     *key ^= g_zCastleKeys[castleRights];
 
-    if(gameState & 0x100) *key ^= g_zBlackToMoveKey;
+    if(g_board.gameState & 0x100) *key ^= g_zBlackToMoveKey;
 }

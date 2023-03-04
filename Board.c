@@ -81,7 +81,7 @@ unsigned char getPieceByte(char pieceChar) {
 }
 
 char getPieceChar(unsigned char pieceByte) {
-    if(pieceByte == EMPTY) return ' ';
+    if(pieceByte == EMPTY) return '-';
     char c = ' ';
     switch(PIECE_TYPE(pieceByte)) {
         case PAWN:
@@ -178,15 +178,19 @@ void getFENStr(char *FENCode) {
     char buff[5];
     int buffLen = 0;
 
-    while(halfMoveCounter) {
-        int digit = (halfMoveCounter / placeVal) % 10;
-        halfMoveCounter -= digit * placeVal;
-        placeVal *= 10;
-        buff[buffLen++] = digit + 48;
-    }
+    if(halfMoveCounter == 0) {
+        FENCode[ptr++] = '0';
+    } else {
+        while(halfMoveCounter) {
+            int digit = (halfMoveCounter / placeVal) % 10;
+            halfMoveCounter -= digit * placeVal;
+            placeVal *= 10;
+            buff[buffLen++] = digit + 48;
+        }
 
-    for(int i = buffLen-1; i >= 0; i --) {
-        FENCode[ptr++] = buff[i];
+        for(int i = buffLen-1; i >= 0; i --) {
+            FENCode[ptr++] = buff[i];
+        }
     }
 
     FENCode[ptr++] = ' ';

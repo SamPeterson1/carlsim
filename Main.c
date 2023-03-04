@@ -4,25 +4,21 @@
 #include <sys/time.h>
 #include "Board.h"
 #include "Commands.h"
+#include "StrUtil.h"
 #include "MoveGenerator.h"
 #include "Book.h"
+#include "Log.h"
+#include "CGI.h"
 
 int main() {
 
+    printf("Content-Type: text/json\n\n");
+    
+    clearLog();
     initMoveGenerator();
     z_init();
-    //bk_parseAll("/home/sam/GitHub/Carlsim/Book/PGN/");
-    //bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Tournaments (1975-2021)/WijkaanZee2017.pgn");
-    /*
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Bucharest2021.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Moscow2020.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/SaintLouis2021.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Stavanger2020.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/Stavanger2021.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/WijkaanZee2020.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/WijkaanZee2021.pgn");
-    bk_parsePGN("/home/sam/GitHub/Carlsim/Book/PGN/WijkaanZee2022.pgn");
-    */
+    bk_parseAll("Book/PGN/");
+
     loadFENStr(STARTING_FEN);
     
     printf("-----------------------------------------------------------------------------------------------------------------------------\n\n");
@@ -55,7 +51,13 @@ int main() {
         }
         len = 0;
 
-        int quit = cmd_execute(command);
+        char **args = initBuffer();
+        int argc;
+        parse(command, args, &argc);
+
+        int quit = cmd_execute(args, argc);
         if(quit) return 0;      
     }
+
+    return 0;
 }

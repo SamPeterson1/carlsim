@@ -5,6 +5,7 @@
 #include "Defines.h"
 #include "Board.h"
 #include "Types.h"
+#include "Log.h"
 #include <stdlib.h>
 #include <time.h>
 
@@ -15,6 +16,6 @@ extern ZobristKey g_zEpFileKeys[8];
 
 void z_init(void);
 void z_getKey(ZobristKey *key);
-void z_hashGameState(uint16_t state, ZobristKey *key);
+void z_hashGameState(ZobristKey *key);
 
 #endif

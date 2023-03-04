@@ -4,9 +4,10 @@
 #include "MoveGenerator.h"
 #include "Search.h"
 #include "Book.h"
+#include "Log.h"
 #include <stdio.h>
 
-int cmd_execute(char *input);
+int cmd_execute(char **args, int argc);
 void cmd_move(char **args, int argc);
 void cmd_printBoard(char **args, int argc);
 void cmd_load(char **args, int argc);
