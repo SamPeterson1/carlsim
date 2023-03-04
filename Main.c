@@ -11,13 +11,11 @@
 #include "CGI.h"
 
 int main() {
-
-    printf("Content-Type: text/json\n\n");
     
     clearLog();
     initMoveGenerator();
     z_init();
-    bk_parseAll("Book/PGN/");
+    //bk_parseAll("Book/PGN/");
 
     loadFENStr(STARTING_FEN);
     
